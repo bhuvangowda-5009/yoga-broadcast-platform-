@@ -1,60 +1,81 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { supabase } from './lib/supabaseClient';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './routes/ProtectedRoute';
 
+// Components
 import Navbar from './components/Navbar';
+
+// Pages
 import Home from './pages/Home';
-import Explore from './pages/Explore';
+import Signup from './pages/Signup';
 import Login from './pages/Login';
+import Today from './pages/Today';
+import Library from './pages/Library';
+import Pricing from './pages/Pricing';
+import Profile from './pages/Profile';
+import Instructor from './pages/Instructor';
 import Coordinator from './pages/Coordinator';
 import Admin from './pages/Admin';
-import Pricing from './pages/Pricing';
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      if (user) fetchUserProfile(user.id);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchUserProfile(currentUser.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function fetchUserProfile(userId) {
-    const { data } = await supabase.from('yoga_profiles').select('*').eq('id', userId).single();
-    if (data) setProfile(data);
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-  }
-
   return (
-    <BrowserRouter>
-      <Navbar user={user} profile={profile} onLogout={handleLogout} />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/explore" element={<Explore user={user} />} />
-        <Route path="/pricing" element={<Pricing user={user} />} />
-        <Route path="/login" element={<Login user={user} />} />
-        <Route path="/coordinator" element={<Coordinator profile={profile} />} />
-        <Route path="/admin" element={<Admin profile={profile} />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Navbar />
+        <Routes>
+          {/* Public Pages */}
+          <Route path="/" element={<Home />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/pricing" element={<Pricing />} />
+
+          {/* Subscriber & Paid Route */}
+          <Route path="/today" element={<Today />} />
+          
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute allowedRoles={['subscriber', 'instructor', 'coordinator', 'admin']}>
+                <Profile />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Instructor Studio */}
+          <Route 
+            path="/instructor" 
+            element={
+              <ProtectedRoute allowedRoles={['instructor', 'admin']}>
+                <Instructor />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Coordinator Portal */}
+          <Route 
+            path="/coordinator" 
+            element={
+              <ProtectedRoute allowedRoles={['coordinator', 'admin']}>
+                <Coordinator />
+              </ProtectedRoute>
+            } 
+          />
+
+          {/* Admin Control */}
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Admin />
+              </ProtectedRoute>
+            } 
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
