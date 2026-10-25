@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Pricing() {
-  const { user, profile, subscription, refreshUserData } = useAuth();
+  const { user, profile, subscription, isDemoActive, refreshUserData } = useAuth();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const navigate = useNavigate();
@@ -28,13 +28,13 @@ export default function Pricing() {
 
   async function handlePayment(planId, planName, amount) {
     if (!user) {
-      alert('Please log in to purchase a pass.');
+      alert('Please log in to purchase a practice pass.');
       navigate('/login');
       return;
     }
 
     if (isStaff) {
-      alert(`As ${role.toUpperCase()}, you have permanent unrestricted staff access and do not require a paid pass.`);
+      alert(`As ${role.toUpperCase()}, you hold permanent staff access clearance.`);
       return;
     }
 
@@ -43,9 +43,7 @@ export default function Pricing() {
 
     try {
       const isLoaded = await loadRazorpayScript();
-      if (!isLoaded) {
-        throw new Error('Razorpay SDK failed to load.');
-      }
+      if (!isLoaded) throw new Error('Razorpay SDK failed to load.');
 
       const isLocalhost =
         window.location.hostname === 'localhost' ||
@@ -63,7 +61,7 @@ export default function Pricing() {
           const orderData = await orderRes.json();
           if (orderData.id) orderId = orderData.id;
         } catch (err) {
-          console.warn('Backend order creation fallback:', err);
+          console.warn('Backend order fallback:', err);
         }
       }
 
@@ -71,8 +69,8 @@ export default function Pricing() {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_YourTestKeyId',
         amount: amount * 100,
         currency: 'INR',
-        name: 'YogaLive Platform',
-        description: `${planName} Access Pass`,
+        name: 'YogaLive Studio',
+        description: `${planName} Subscription`,
         order_id: orderId.startsWith('order_local_') ? undefined : orderId,
         prefill: {
           name: profile?.name || user.email.split('@')[0],
@@ -85,9 +83,8 @@ export default function Pricing() {
         handler: async function (response) {
           try {
             const paymentId = response.razorpay_payment_id || `pay_${Date.now()}`;
-            const durationDays = planId === 'weekly' ? 7 : 30;
             const startDate = new Date().toISOString();
-            const endDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+            const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
             await supabase.from('subscriptions').delete().eq('user_id', user.id);
 
@@ -113,7 +110,7 @@ export default function Pricing() {
             ]);
 
             await refreshUserData(user.id);
-            setMsg(`🎉 Payment of ₹${amount} successful! Unlocking studio...`);
+            setMsg(`🎉 Payment of ₹${amount} successful! Unlocking ${planName}...`);
 
             setTimeout(() => {
               navigate('/today');
@@ -145,7 +142,7 @@ export default function Pricing() {
       color: '#f8fafc',
       padding: '3rem 1.5rem 6rem 1.5rem'
     }}>
-      <div style={{ maxWidth: '880px', margin: '0 auto', textAlign: 'center' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto', textAlign: 'center' }}>
         <div style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -157,18 +154,35 @@ export default function Pricing() {
           marginBottom: '1rem'
         }}>
           <span style={{ fontSize: '0.72rem', fontWeight: '800', letterSpacing: '0.8px', color: '#38bdf8' }}>
-            SUBSCRIBER ACCESS TIERS
+            PRACTICE LEVEL PRICING ALLOCATIONS
           </span>
         </div>
 
         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.8px', margin: '0 0 0.6rem 0' }}>
-          YogaLive Membership Passes
+          Choose Your Practice Tier
         </h1>
-        <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '580px', margin: '0 auto 2rem auto' }}>
-          Select a pass to unlock daily morning & evening live broadcasts and posture Q&A with yoga masters.
+        <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '640px', margin: '0 auto 2rem auto' }}>
+          Tailored subscriptions for your yoga journey. Every account starts with a <strong>1-Day Free Trial</strong> for all live practices.
         </p>
 
-        {/* STAFF CLEARANCE BANNER */}
+        {/* DEMO NOTICE */}
+        {isDemoActive && !subscription && !isStaff && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            color: '#fbbf24',
+            padding: '0.8rem 1.2rem',
+            borderRadius: '12px',
+            marginBottom: '2rem',
+            maxWidth: '650px',
+            margin: '0 auto 2rem auto',
+            fontSize: '0.88rem',
+            fontWeight: '600'
+          }}>
+            ✨ Day 1 Free Demo Active! You can join any live studio practice today without payment. Select a tier below for uninterrupted access.
+          </div>
+        )}
+
         {isStaff && (
           <div style={{
             background: 'rgba(244, 63, 94, 0.1)',
@@ -182,13 +196,8 @@ export default function Pricing() {
               🛡️ Staff Access Clearance Active
             </h4>
             <p style={{ margin: 0, fontSize: '0.85rem', color: '#cbd5e1' }}>
-              You are logged in with the official role of <strong>{role.toUpperCase()}</strong>. You already have full platform clearance and do not need to purchase subscriber passes.
+              You are logged in as <strong>{role.toUpperCase()}</strong>. You hold universal studio and library clearance.
             </p>
-            <div style={{ marginTop: '0.8rem' }}>
-              <Link to="/today" style={{ color: '#38bdf8', fontWeight: '700', fontSize: '0.85rem', textDecoration: 'none' }}>
-                Go to Today's Practice Studio →
-              </Link>
-            </div>
           </div>
         )}
 
@@ -203,7 +212,7 @@ export default function Pricing() {
             fontWeight: '700',
             fontSize: '0.9rem'
           }}>
-            ✓ Active Pass: {subscription.plan_id.toUpperCase()} (Valid until {new Date(subscription.end_date).toLocaleDateString()})
+            ✓ Active Subscription: <strong>{subscription.plan_id.toUpperCase()} TIER</strong> (Valid until {new Date(subscription.end_date).toLocaleDateString()})
           </div>
         )}
 
@@ -221,19 +230,19 @@ export default function Pricing() {
           </div>
         )}
 
-        {/* PRICING CARDS */}
+        {/* 3 PRACTICE-LEVEL TIERS */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
           gap: '24px',
           marginTop: '1rem'
         }}>
-          {/* WEEKLY */}
+          {/* TIER 1: FOUNDATION */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.65)',
             border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '20px',
-            padding: '2.4rem',
+            padding: '2.2rem',
             backdropFilter: 'blur(20px)',
             display: 'flex',
             flexDirection: 'column',
@@ -241,20 +250,24 @@ export default function Pricing() {
             textAlign: 'left'
           }}>
             <div>
-              <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#94a3b8', letterSpacing: '0.8px' }}>
-                WEEKLY ACCESS
+              <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.8px' }}>
+                LEVEL 1: BEGINNER
               </span>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Weekly Pass</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Foundation Tier</h3>
               <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
-                ₹299
+                ₹299<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
               </p>
-              <p style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: 1.5, margin: 0 }}>
-                Full access to morning & evening live streams, chat Q&A, and attendance streak logging for 7 days.
-              </p>
+              <ul style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.8, paddingLeft: '1.2rem', margin: '0 0 1.5rem 0' }}>
+                <li>Daily Beginner Morning Surya Namaskar</li>
+                <li>Hatha Yoga Alignment & Posture basics</li>
+                <li>Daily Pranayama (Breathwork) sessions</li>
+                <li>Live Chat instructor Q&A</li>
+                <li style={{ color: '#64748b' }}>✕ Library recordings not included</li>
+              </ul>
             </div>
             <button
               disabled={loading || isStaff}
-              onClick={() => handlePayment('weekly', 'Weekly Pass', 299)}
+              onClick={() => handlePayment('foundation', 'Foundation Tier', 299)}
               style={{
                 width: '100%',
                 padding: '0.85rem',
@@ -263,20 +276,65 @@ export default function Pricing() {
                 background: isStaff ? '#334155' : '#0284c7',
                 color: isStaff ? '#94a3b8' : '#fff',
                 fontWeight: '800',
-                cursor: (loading || isStaff) ? 'not-allowed' : 'pointer',
-                marginTop: '2rem'
+                cursor: (loading || isStaff) ? 'not-allowed' : 'pointer'
               }}
             >
-              {isStaff ? 'Staff Exempt' : loading ? 'Opening...' : 'Pay with Razorpay (₹299)'}
+              {isStaff ? 'Staff Exempt' : 'Select Foundation (₹299)'}
             </button>
           </div>
 
-          {/* MONTHLY */}
+          {/* TIER 2: VINYASA FLOW */}
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.65)',
+            border: '1px solid rgba(56, 189, 248, 0.35)',
+            borderRadius: '20px',
+            padding: '2.2rem',
+            backdropFilter: 'blur(20px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            textAlign: 'left'
+          }}>
+            <div>
+              <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.8px' }}>
+                LEVEL 2: INTERMEDIATE
+              </span>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Vinyasa Flow Tier</h3>
+              <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
+                ₹599<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
+              </p>
+              <ul style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.8, paddingLeft: '1.2rem', margin: '0 0 1.5rem 0' }}>
+                <li>Everything in Foundation Tier</li>
+                <li>Dynamic Vinyasa Flow morning & evening</li>
+                <li>Spinal mobility & core conditioning</li>
+                <li>Real-time posture feedback via chat</li>
+                <li style={{ color: '#64748b' }}>✕ Library recordings not included</li>
+              </ul>
+            </div>
+            <button
+              disabled={loading || isStaff}
+              onClick={() => handlePayment('vinyasa', 'Vinyasa Flow Tier', 599)}
+              style={{
+                width: '100%',
+                padding: '0.85rem',
+                borderRadius: '10px',
+                border: 'none',
+                background: isStaff ? '#334155' : '#0284c7',
+                color: isStaff ? '#94a3b8' : '#fff',
+                fontWeight: '800',
+                cursor: (loading || isStaff) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isStaff ? 'Staff Exempt' : 'Select Vinyasa (₹599)'}
+            </button>
+          </div>
+
+          {/* TIER 3: MASTERY ALL-ACCESS (INCLUDES ON-DEMAND LIBRARY) */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.65)',
             border: '1px solid rgba(16, 185, 129, 0.35)',
             borderRadius: '20px',
-            padding: '2.4rem',
+            padding: '2.2rem',
             backdropFilter: 'blur(20px)',
             display: 'flex',
             flexDirection: 'column',
@@ -287,23 +345,27 @@ export default function Pricing() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#34d399', letterSpacing: '0.8px' }}>
-                  MONTHLY UNLIMITED
+                  LEVEL 3: ADVANCED + VAULT
                 </span>
                 <span style={{ fontSize: '0.7rem', fontWeight: '800', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '2px 8px', borderRadius: '4px' }}>
-                  POPULAR
+                  MOST COMPLETE
                 </span>
               </div>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Monthly Pass</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Mastery All-Access</h3>
               <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
-                ₹999
+                ₹999<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
               </p>
-              <p style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: 1.5, margin: 0 }}>
-                30 days unrestricted access to daily studio sessions, posture Q&A, and full habit streak retention.
-              </p>
+              <ul style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.8, paddingLeft: '1.2rem', margin: '0 0 1.5rem 0' }}>
+                <li>Unrestricted access to all Beginner, Intermediate & Advanced live sessions</li>
+                <li>Ashtanga Primary Series & Bandha alignment</li>
+                <li><strong>Exclusive 24/7 access to On-Demand Library Recordings</strong></li>
+                <li>WhatsApp & SMS automated reminders</li>
+                <li>Full habit streak analytics</li>
+              </ul>
             </div>
             <button
               disabled={loading || isStaff}
-              onClick={() => handlePayment('monthly', 'Monthly Unlimited', 999)}
+              onClick={() => handlePayment('all_access', 'Mastery All-Access', 999)}
               style={{
                 width: '100%',
                 padding: '0.85rem',
@@ -312,11 +374,10 @@ export default function Pricing() {
                 background: isStaff ? '#334155' : '#10b981',
                 color: isStaff ? '#94a3b8' : '#0f172a',
                 fontWeight: '800',
-                cursor: (loading || isStaff) ? 'not-allowed' : 'pointer',
-                marginTop: '2rem'
+                cursor: (loading || isStaff) ? 'not-allowed' : 'pointer'
               }}
             >
-              {isStaff ? 'Staff Exempt' : loading ? 'Opening...' : 'Pay with Razorpay (₹999)'}
+              {isStaff ? 'Staff Exempt' : 'Unlock All-Access (₹999)'}
             </button>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 export default function Today() {
-  const { user, profile, subscription } = useAuth();
+  const { user, profile, subscription, isDemoActive } = useAuth();
   const [liveSession, setLiveSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
@@ -14,7 +14,26 @@ export default function Today() {
 
   const role = profile?.role || 'subscriber';
   const isStaffOrAdmin = role === 'admin' || role === 'instructor' || role === 'coordinator';
-  const hasAccess = !!subscription || isStaffOrAdmin;
+
+  // Level access hierarchy
+  function checkPracticeAccess(sessionLevel, userPlanId) {
+    if (isStaffOrAdmin || isDemoActive) return true;
+    if (!subscription) return false;
+
+    const currentPlan = userPlanId || subscription.plan_id;
+    if (currentPlan === 'all_access') return true;
+
+    const level = (sessionLevel || 'All Levels').toLowerCase();
+    if (currentPlan === 'vinyasa') {
+      return level === 'beginner' || level === 'intermediate' || level === 'all levels';
+    }
+    if (currentPlan === 'foundation') {
+      return level === 'beginner' || level === 'all levels';
+    }
+    return true;
+  }
+
+  const hasAccess = checkPracticeAccess(liveSession?.level, subscription?.plan_id);
 
   useEffect(() => {
     let sessionChannel = null;
@@ -121,7 +140,7 @@ export default function Today() {
 
   async function handleSendChat(e) {
     e.preventDefault();
-    if (!newMsg.trim() || !user || !liveSession?.id) return;
+    if (!newMsg.trim() || !user || !liveSession?.id || !hasAccess) return;
 
     const textToSend = newMsg.trim();
     setNewMsg('');
@@ -151,29 +170,45 @@ export default function Today() {
       padding: '2.5rem 1.5rem 5rem 1.5rem'
     }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        {/* HEADER BAR */}
+        {/* TOP STATUS BAR */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
           <div>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'rgba(239, 68, 68, 0.12)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              padding: '4px 12px',
-              borderRadius: '20px',
-              marginBottom: '0.8rem'
-            }}>
-              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></span>
-              <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.8px', color: '#f87171' }}>
-                SYNCHRONOUS STUDIO BROADCAST
-              </span>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '0.8rem' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                padding: '4px 12px',
+                borderRadius: '20px'
+              }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></span>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.8px', color: '#f87171' }}>
+                  SYNCHRONOUS STUDIO BROADCAST
+                </span>
+              </div>
+
+              {isDemoActive && !subscription && !isStaffOrAdmin && (
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  color: '#fbbf24',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  padding: '4px 10px',
+                  borderRadius: '20px'
+                }}>
+                  ✨ DAY 1 FREE DEMO PASS ACTIVE
+                </span>
+              )}
             </div>
+
             <h1 style={{ fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.8px', margin: '0 0 0.4rem 0' }}>
               Today's Live Practice
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '0.92rem', margin: 0 }}>
-              Synchronous asana instruction with low-latency WebRTC and live posture consultation.
+              Live instruction for <strong style={{ color: '#38bdf8' }}>{liveSession?.level || 'All Levels'}</strong> practitioners.
             </p>
           </div>
 
@@ -199,14 +234,14 @@ export default function Today() {
         {/* ACCESS CHECK */}
         {!hasAccess ? (
           <div style={{
-            background: 'rgba(15, 23, 42, 0.7)',
+            background: 'rgba(15, 23, 42, 0.75)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: '24px',
             backdropFilter: 'blur(24px)',
             boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
             padding: '4rem 2rem',
             textAlign: 'center',
-            maxWidth: '620px',
+            maxWidth: '640px',
             margin: '3rem auto'
           }}>
             <div style={{
@@ -223,9 +258,13 @@ export default function Today() {
             }}>
               🔒
             </div>
-            <h2 style={{ fontSize: '1.7rem', fontWeight: '800', margin: '0 0 0.6rem 0' }}>Membership Pass Required</h2>
+            <h2 style={{ fontSize: '1.7rem', fontWeight: '800', margin: '0 0 0.6rem 0' }}>
+              {isDemoActive ? 'Tier Upgrade Required' : 'Free Demo Expired'}
+            </h2>
             <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem auto' }}>
-              Daily morning and evening live broadcasts, posture correction Q&A, and streak telemetry are reserved for active subscribers.
+              {!subscription
+                ? 'Your 1st-Day Free Trial window has concluded. Please select a practice tier to continue joining live broadcasts.'
+                : `This session requires access clearance for "${liveSession?.level || 'Advanced'}" level flows. Upgrade your pass to join.`}
             </p>
             <Link
               to="/pricing"
@@ -241,7 +280,7 @@ export default function Today() {
                 boxShadow: '0 10px 25px -5px rgba(2, 132, 199, 0.5)'
               }}
             >
-              Choose a Pass to Unlock →
+              View Practice Tiers & Upgrade →
             </Link>
           </div>
         ) : (
@@ -261,7 +300,6 @@ export default function Today() {
               backdropFilter: 'blur(20px)',
               boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)'
             }}>
-              {/* VIDEO HEADER BAR */}
               <div style={{
                 padding: '1.2rem 1.6rem',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
@@ -276,7 +314,7 @@ export default function Today() {
                     {liveSession?.title || 'Daily Surya & Pranayama Stream'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
-                    Lead Instructor: <strong style={{ color: '#38bdf8' }}>{liveSession?.instructor_name || 'Acharya Dev'}</strong> • Tier: <strong style={{ color: '#34d399' }}>{liveSession?.level || 'All Levels'}</strong>
+                    Instructor: <strong style={{ color: '#38bdf8' }}>{liveSession?.instructor_name || 'Acharya Dev'}</strong> • Difficulty: <strong style={{ color: '#34d399' }}>{liveSession?.level || 'All Levels'}</strong>
                   </p>
                 </div>
                 <div style={{
@@ -296,7 +334,6 @@ export default function Today() {
                 </div>
               </div>
 
-              {/* EMBEDDED IFRAME */}
               <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
                 <iframe
                   src={liveSession?.stream_url || 'https://meet.jit.si/YogaLive_Permanent_MainStudio'}
@@ -314,7 +351,6 @@ export default function Today() {
                 />
               </div>
 
-              {/* TELEMETRY FOOTER */}
               <div style={{
                 padding: '1rem 1.6rem',
                 background: 'rgba(0, 0, 0, 0.35)',
@@ -324,8 +360,8 @@ export default function Today() {
                 fontSize: '0.8rem',
                 color: '#64748b'
               }}>
-                <span>Session ID: {liveSession?.id ? liveSession.id.substring(0, 16) + '...' : 'Permanent Main Room'}</span>
-                <span>WebRTC Mesh • Full Duplex Audio</span>
+                <span>Session: {liveSession?.id ? liveSession.id.substring(0, 16) + '...' : 'Main Studio'}</span>
+                <span>WebRTC Mesh • Two-Way Audio Active</span>
               </div>
             </div>
 
@@ -341,7 +377,6 @@ export default function Today() {
               boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
               overflow: 'hidden'
             }}>
-              {/* CHAT HEADER */}
               <div style={{
                 padding: '1.2rem 1.4rem',
                 borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
@@ -351,14 +386,15 @@ export default function Today() {
               }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '800' }}>Live Posture Q&A</h4>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: '#64748b' }}>Direct channel to instructor</p>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: '#64748b' }}>
+                    {isDemoActive && !subscription ? 'Demo User Access Active' : 'Verified Member Channel'}
+                  </p>
                 </div>
                 <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
                   {messages.length} MSGS
                 </span>
               </div>
 
-              {/* CHAT FEED */}
               <div style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -369,8 +405,8 @@ export default function Today() {
               }}>
                 {messages.length === 0 ? (
                   <div style={{ textAlign: 'center', margin: 'auto 0', color: '#64748b', fontSize: '0.85rem' }}>
-                    <p style={{ margin: 0 }}>No messages yet.</p>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem' }}>Ask posture questions or confirm your alignment!</p>
+                    <p style={{ margin: 0 }}>No questions posted yet.</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem' }}>Type below to ask instructor about your posture.</p>
                   </div>
                 ) : (
                   messages.map((m, idx) => {
@@ -405,7 +441,6 @@ export default function Today() {
                 <div ref={chatEndRef} />
               </div>
 
-              {/* CHAT INPUT */}
               <form onSubmit={handleSendChat} style={{
                 padding: '0.9rem',
                 borderTop: '1px solid rgba(255, 255, 255, 0.06)',

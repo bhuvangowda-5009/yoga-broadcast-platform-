@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [subscription, setSubscription] = useState(null);
+  const [isDemoActive, setIsDemoActive] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function refreshUserData(userId) {
@@ -14,6 +15,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setProfile(null);
       setSubscription(null);
+      setIsDemoActive(false);
       setLoading(false);
       return;
     }
@@ -33,8 +35,18 @@ export const AuthProvider = ({ children }) => {
         .eq('status', 'active')
         .maybeSingle();
       setSubscription(sub || null);
+
+      // Calculate 1-Day Free Demo window (24 hours from account creation)
+      if (prof?.created_at) {
+        const createdTime = new Date(prof.created_at).getTime();
+        const now = Date.now();
+        const diffHours = (now - createdTime) / (1000 * 60 * 60);
+        setIsDemoActive(diffHours <= 24);
+      } else {
+        setIsDemoActive(false);
+      }
     } catch (err) {
-      console.error('Error refreshing user state:', err);
+      console.error('Error refreshing auth data:', err);
     } finally {
       setLoading(false);
     }
@@ -59,6 +71,7 @@ export const AuthProvider = ({ children }) => {
         } else {
           setProfile(null);
           setSubscription(null);
+          setIsDemoActive(false);
           setLoading(false);
         }
       }
@@ -69,15 +82,15 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  // Resilient logout that clears React state even if server socket delays
   const signOut = async () => {
     try {
       setUser(null);
       setProfile(null);
       setSubscription(null);
+      setIsDemoActive(false);
       await supabase.auth.signOut();
     } catch (err) {
-      console.warn('SignOut network fallback:', err.message);
+      console.warn('SignOut warning:', err.message);
     } finally {
       localStorage.clear();
       sessionStorage.clear();
@@ -85,7 +98,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, subscription, loading, refreshUserData, signOut }}>
+    <AuthContext.Provider value={{ user, profile, subscription, isDemoActive, loading, refreshUserData, signOut }}>
       {children}
     </AuthContext.Provider>
   );

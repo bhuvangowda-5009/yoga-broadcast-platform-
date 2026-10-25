@@ -11,9 +11,10 @@ export default function Library() {
   const [loading, setLoading] = useState(true);
 
   const role = profile?.role || 'subscriber';
-  const hasAccess = !!subscription || role === 'admin' || role === 'instructor' || role === 'coordinator';
+  const isStaff = role === 'admin' || role === 'instructor' || role === 'coordinator';
+  // Strictly requires paid subscription (or staff) - Demo users CANNOT access library
+  const hasAccess = !!subscription || isStaff;
 
-  // Seed default high-grade recorded masterclasses if database is fresh
   const defaultRecordings = [
     {
       id: 'rec-1',
@@ -66,7 +67,6 @@ export default function Library() {
         .order('created_at', { ascending: false });
 
       if (data && data.length > 0) {
-        // Merge DB sessions with metadata
         const formatted = data.map((s, idx) => ({
           id: s.id,
           title: s.title || 'Recorded Masterclass Flow',
@@ -121,7 +121,7 @@ export default function Library() {
               On-Demand Practice Library
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: 0 }}>
-              Access our complete catalog of archived daily broadcasts, pranayama drills, and guided flows.
+              Archived library accessible exclusively to verified paid subscribers.
             </p>
           </div>
 
@@ -148,8 +148,7 @@ export default function Library() {
                     color: active ? '#fff' : '#94a3b8',
                     fontWeight: active ? '800' : '600',
                     fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
+                    cursor: 'pointer'
                   }}
                 >
                   {lvl}
@@ -159,121 +158,112 @@ export default function Library() {
           </div>
         </div>
 
-        {/* ACCESS WARNING FOR UNPAID SUBSCRIBERS */}
-        {!hasAccess && (
+        {/* LOCKED VAULT PROMPT FOR NON-PAID USERS */}
+        {!hasAccess ? (
           <div style={{
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            borderRadius: '16px',
-            padding: '1.2rem 1.6rem',
-            marginBottom: '2.5rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '1rem'
+            background: 'rgba(15, 23, 42, 0.75)',
+            border: '1px solid rgba(244, 63, 94, 0.3)',
+            borderRadius: '24px',
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
+            padding: '4.5rem 2rem',
+            textAlign: 'center',
+            maxWidth: '640px',
+            margin: '3rem auto'
           }}>
-            <div>
-              <h4 style={{ margin: '0 0 2px 0', color: '#f87171', fontSize: '0.95rem', fontWeight: '800' }}>
-                🔒 High-Definition Vault Locked
-              </h4>
-              <p style={{ margin: 0, color: '#cbd5e1', fontSize: '0.84rem' }}>
-                Archived masterclasses require an active membership pass or staff credentials.
-              </p>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'rgba(244, 63, 94, 0.12)',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.6rem',
+              marginBottom: '1.2rem'
+            }}>
+              🔒
             </div>
+            <h2 style={{ fontSize: '1.7rem', fontWeight: '800', margin: '0 0 0.6rem 0' }}>
+              Vault Reserved For Paid Subscribers
+            </h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem auto' }}>
+              The 1-Day Free Demo includes live daily broadcasts, but recorded session archives are reserved for members holding an active subscription pass.
+            </p>
             <Link
               to="/pricing"
               style={{
-                padding: '6px 16px',
-                borderRadius: '8px',
-                background: '#0284c7',
-                color: '#fff',
+                display: 'inline-block',
+                padding: '0.9rem 2.2rem',
+                borderRadius: '12px',
+                background: '#10b981',
+                color: '#0f172a',
                 textDecoration: 'none',
                 fontWeight: '800',
-                fontSize: '0.8rem'
+                fontSize: '0.95rem',
+                boxShadow: '0 8px 25px -4px rgba(16, 185, 129, 0.4)'
               }}
             >
-              Unlock Vault Passes →
+              Unlock On-Demand Library Pass →
             </Link>
           </div>
-        )}
-
-        {/* VIDEO CARDS GRID */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
-          gap: '24px'
-        }}>
-          {filteredSessions.map((rec) => (
-            <div
-              key={rec.id}
-              style={{
-                background: 'rgba(15, 23, 42, 0.65)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '20px',
-                overflow: 'hidden',
-                backdropFilter: 'blur(20px)',
-                boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.6)',
-                display: 'flex',
-                flexDirection: 'column',
-                transition: 'transform 0.2s ease, border-color 0.2s ease',
-                cursor: hasAccess ? 'pointer' : 'default'
-              }}
-              onClick={() => {
-                if (hasAccess) setSelectedVideo(rec);
-              }}
-              onMouseEnter={(e) => {
-                if (hasAccess) {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.35)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (hasAccess) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                }
-              }}
-            >
-              {/* THUMBNAIL */}
-              <div style={{ position: 'relative', width: '100%', height: '170px', background: '#000', overflow: 'hidden' }}>
-                <img
-                  src={rec.thumbnail}
-                  alt={rec.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: hasAccess ? 0.85 : 0.4 }}
-                />
-                <span style={{
-                  position: 'absolute',
-                  top: '12px',
-                  left: '12px',
-                  background: 'rgba(0, 0, 0, 0.65)',
-                  backdropFilter: 'blur(8px)',
-                  color: '#38bdf8',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800',
-                  border: '1px solid rgba(56, 189, 248, 0.3)'
-                }}>
-                  {rec.level}
-                </span>
-
-                <span style={{
-                  position: 'absolute',
-                  bottom: '12px',
-                  right: '12px',
-                  background: 'rgba(0, 0, 0, 0.75)',
-                  backdropFilter: 'blur(6px)',
-                  color: '#f8fafc',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.72rem',
-                  fontWeight: '700'
-                }}>
-                  {rec.duration}
-                </span>
-
-                {hasAccess && (
+        ) : (
+          /* VIDEO CARDS GRID (PAID SUBSCRIBERS ONLY) */
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
+            gap: '24px'
+          }}>
+            {filteredSessions.map((rec) => (
+              <div
+                key={rec.id}
+                style={{
+                  background: 'rgba(15, 23, 42, 0.65)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  backdropFilter: 'blur(20px)',
+                  boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.6)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setSelectedVideo(rec)}
+              >
+                <div style={{ position: 'relative', width: '100%', height: '170px', background: '#000', overflow: 'hidden' }}>
+                  <img
+                    src={rec.thumbnail}
+                    alt={rec.title}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    background: 'rgba(0, 0, 0, 0.65)',
+                    color: '#38bdf8',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    border: '1px solid rgba(56, 189, 248, 0.3)'
+                  }}>
+                    {rec.level}
+                  </span>
+                  <span style={{
+                    position: 'absolute',
+                    bottom: '12px',
+                    right: '12px',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    color: '#f8fafc',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.72rem',
+                    fontWeight: '700'
+                  }}>
+                    {rec.duration}
+                  </span>
                   <div style={{
                     position: 'absolute',
                     top: '50%',
@@ -291,33 +281,29 @@ export default function Library() {
                   }}>
                     ▶
                   </div>
-                )}
-              </div>
-
-              {/* DETAILS */}
-              <div style={{ padding: '1.4rem', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: '800', color: '#f8fafc', lineHeight: 1.4 }}>
-                    {rec.title}
-                  </h3>
-                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-                    Instructor: <strong style={{ color: '#cbd5e1' }}>{rec.instructor_name}</strong>
-                  </p>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.8rem', fontSize: '0.76rem', color: '#64748b' }}>
-                  <span>Archived: {rec.date}</span>
-                  <span style={{ color: hasAccess ? '#34d399' : '#f87171', fontWeight: '700' }}>
-                    {hasAccess ? 'Ready to Replay' : 'Pass Required'}
-                  </span>
+                <div style={{ padding: '1.4rem', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: '800', color: '#f8fafc', lineHeight: 1.4 }}>
+                      {rec.title}
+                    </h3>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.82rem', color: '#94a3b8' }}>
+                      Instructor: <strong style={{ color: '#cbd5e1' }}>{rec.instructor_name}</strong>
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.8rem', fontSize: '0.76rem', color: '#64748b' }}>
+                    <span>Recorded: {rec.date}</span>
+                    <span style={{ color: '#34d399', fontWeight: '700' }}>Unlocked ✓</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* MODAL VIDEO PLAYER */}
-        {selectedVideo && (
+        {/* MODAL PLAYER */}
+        {selectedVideo && hasAccess && (
           <div style={{
             position: 'fixed',
             top: 0,
@@ -376,7 +362,7 @@ export default function Library() {
               </div>
 
               <div style={{ padding: '1.2rem 1.6rem', fontSize: '0.85rem', color: '#94a3b8' }}>
-                Lead Master: <strong style={{ color: '#fff' }}>{selectedVideo.instructor_name}</strong> • Level: <strong style={{ color: '#38bdf8' }}>{selectedVideo.level}</strong> • Full Practice Replay
+                Instructor: <strong style={{ color: '#fff' }}>{selectedVideo.instructor_name}</strong> • Level: <strong style={{ color: '#38bdf8' }}>{selectedVideo.level}</strong>
               </div>
             </div>
           </div>
