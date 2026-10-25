@@ -1,66 +1,94 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-const AuthContext = createContext();
+const AuthContext = createContext({});
 
-export function AuthProvider({ children }) {
+export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  async function refreshUserData(userId) {
+    if (!userId) {
+      setUser(null);
+      setProfile(null);
+      setSubscription(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data: prof } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      setProfile(prof || null);
+
+      const { data: sub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle();
+      setSubscription(sub || null);
+    } catch (err) {
+      console.error('Error refreshing user state:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      setUser(user);
-      if (user) await refreshUserData(user.id);
-      setLoading(false);
-    });
-
-    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      if (currentUser) {
-        await refreshUserData(currentUser.id);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        refreshUserData(session.user.id);
       } else {
-        setProfile(null);
-        setSubscription(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => authSub.unsubscribe();
+    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          await refreshUserData(currentUser.id);
+        } else {
+          setProfile(null);
+          setSubscription(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      authListener?.unsubscribe();
+    };
   }, []);
 
-  async function refreshUserData(userId) {
-    // 1. Fetch Profile
-    const { data: prof } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
-    setProfile(prof);
-
-    // 2. Fetch Active Subscription
-    const { data: sub } = await supabase
-      .from('subscriptions')
-      .select('*, plans(*)')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .order('end_date', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    setSubscription(sub);
-  }
-
-  async function logout() {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setSubscription(null);
-  }
+  // Resilient logout that clears React state even if server socket delays
+  const signOut = async () => {
+    try {
+      setUser(null);
+      setProfile(null);
+      setSubscription(null);
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('SignOut network fallback:', err.message);
+    } finally {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, profile, subscription, loading, refreshUserData, logout }}>
+    <AuthContext.Provider value={{ user, profile, subscription, loading, refreshUserData, signOut }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 export const useAuth = () => useContext(AuthContext);

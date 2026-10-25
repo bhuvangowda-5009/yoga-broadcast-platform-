@@ -9,15 +9,18 @@ export default function Today() {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [attendanceLogged, setAttendanceLogged] = useState(false);
-
+  const chatEndRef = useRef(null);
   const attendanceMarkedRef = useRef(false);
+
+  const role = profile?.role || 'subscriber';
+  const isStaffOrAdmin = role === 'admin' || role === 'instructor' || role === 'coordinator';
+  const hasAccess = !!subscription || isStaffOrAdmin;
 
   useEffect(() => {
     let sessionChannel = null;
     let chatChannel = null;
 
     async function initializeStudio() {
-      // 1. Fetch current live session or fallback to permanent session record
       let { data: session } = await supabase
         .from('sessions')
         .select('*')
@@ -38,7 +41,6 @@ export default function Today() {
       if (session) {
         setLiveSession(session);
 
-        // Fetch previous message history
         const { data: msgHistory } = await supabase
           .from('yoga_chat_messages')
           .select('*')
@@ -47,7 +49,6 @@ export default function Today() {
 
         if (msgHistory) setMessages(msgHistory);
 
-        // Subscribe to real-time chat with a unique channel name per mount
         const chatChannelName = `chat_${session.id}_${Math.random().toString(36).substring(2, 9)}`;
         chatChannel = supabase
           .channel(chatChannelName)
@@ -70,7 +71,6 @@ export default function Today() {
           )
           .subscribe();
 
-        // 2. Mark attendance once per user login session
         if (user && !attendanceMarkedRef.current) {
           attendanceMarkedRef.current = true;
           supabase
@@ -92,7 +92,6 @@ export default function Today() {
         }
       }
 
-      // 3. Track live session status updates
       const sessionChannelName = `session_updates_${Math.random().toString(36).substring(2, 9)}`;
       sessionChannel = supabase
         .channel(sessionChannelName)
@@ -116,6 +115,10 @@ export default function Today() {
     };
   }, [user]);
 
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   async function handleSendChat(e) {
     e.preventDefault();
     if (!newMsg.trim() || !user || !liveSession?.id) return;
@@ -123,93 +126,329 @@ export default function Today() {
     const textToSend = newMsg.trim();
     setNewMsg('');
 
+    const senderDisplay = profile?.name || user.email.split('@')[0];
+
     const { error } = await supabase.from('yoga_chat_messages').insert([
       {
         session_id: liveSession.id,
         user_id: user.id,
-        sender_name: profile?.name || user.email.split('@')[0],
+        sender_name: senderDisplay,
         message: textToSend
       }
     ]);
 
     if (error) {
-      console.error('Chat send error:', error.message);
+      console.error('Chat error:', error.message);
     }
   }
 
-  const isPaid =
-    subscription ||
-    profile?.role === 'admin' ||
-    profile?.role === 'coordinator' ||
-    profile?.role === 'instructor';
-
   return (
-    <div style={{ maxWidth: '1100px', margin: '2rem auto', padding: '1rem', fontFamily: 'sans-serif' }}>
-      <h2>Today's Live Practice</h2>
-
-      {!isPaid ? (
-        <div style={{ padding: '3rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', textAlign: 'center' }}>
-          <h3 style={{ color: '#b91c1c' }}>🔒 Subscription Required</h3>
-          <p style={{ color: '#64748b', maxWidth: '500px', margin: '0.5rem auto 1.5rem' }}>
-            Daily live stream broadcast and instructor posture Q&A are reserved for active members.
-          </p>
-          <Link to="/pricing" style={{ padding: '0.7rem 1.4rem', background: '#16a34a', color: '#fff', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
-            Choose a Pass to Unlock →
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.2rem', marginTop: '1rem' }}>
-          {/* PERMANENT LIVE BROADCAST PLAYER */}
-          <div style={{ background: '#0f172a', padding: '1rem', borderRadius: '8px', color: '#fff' }}>
-            <h3>🔴 Broadcasting: {liveSession?.title || 'Daily Surya Flow'}</h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-              Instructor: {liveSession?.instructor_name || 'Acharya Dev'} | Level: {liveSession?.level || 'All Levels'}
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at 50% 0%, #172554 0%, #090d16 60%, #030712 100%)',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: '#f8fafc',
+      padding: '2.5rem 1.5rem 5rem 1.5rem'
+    }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+        {/* HEADER BAR */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+          <div>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              marginBottom: '0.8rem'
+            }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></span>
+              <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.8px', color: '#f87171' }}>
+                SYNCHRONOUS STUDIO BROADCAST
+              </span>
+            </div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: '900', letterSpacing: '-0.8px', margin: '0 0 0.4rem 0' }}>
+              Today's Live Practice
+            </h1>
+            <p style={{ color: '#94a3b8', fontSize: '0.92rem', margin: 0 }}>
+              Synchronous asana instruction with low-latency WebRTC and live posture consultation.
             </p>
-            <div style={{ background: '#000', borderRadius: '6px', height: '420px', overflow: 'hidden', marginTop: '0.8rem' }}>
-              <iframe
-                src={liveSession?.stream_url || 'https://meet.jit.si/YogaLive_Permanent_MainStudio'}
-                title="YogaLive Permanent Broadcast Studio"
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                allow="camera; microphone; fullscreen; display-capture; autoplay"
-                allowFullScreen
-              />
-            </div>
-            {attendanceLogged && (
-              <p style={{ color: '#4ade80', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                ✓ Attendance logged for today. Streak updated!
-              </p>
-            )}
           </div>
 
-          {/* REALTIME CHAT */}
-          <div style={{ background: '#1e293b', borderRadius: '8px', padding: '1rem', display: 'flex', flexDirection: 'column', height: '480px', color: '#fff' }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', color: '#38bdf8' }}>Live Posture Q&A</h4>
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {messages.length === 0 && (
-                <p style={{ fontSize: '0.8rem', color: '#64748b' }}>No messages yet. Ask a question!</p>
-              )}
-              {messages.map((m, i) => (
-                <div key={m.id || i} style={{ background: '#334155', padding: '6px 8px', borderRadius: '4px', fontSize: '0.85rem' }}>
-                  <strong style={{ color: '#7dd3fc' }}>{m.sender_name}: </strong>{m.message}
-                </div>
-              ))}
+          {attendanceLogged && (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              padding: '8px 16px',
+              borderRadius: '12px',
+              color: '#34d399',
+              fontSize: '0.82rem',
+              fontWeight: '700'
+            }}>
+              <span>✓ Attendance Logged</span>
+              <span style={{ color: '#6ee7b7' }}>• Daily Streak Updated</span>
             </div>
-
-            <form onSubmit={handleSendChat} style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-              <input
-                type="text"
-                placeholder="Ask instructor..."
-                value={newMsg}
-                onChange={(e) => setNewMsg(e.target.value)}
-                style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: 'none' }}
-              />
-              <button type="submit" style={{ padding: '0.5rem 0.8rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                Send
-              </button>
-            </form>
-          </div>
+          )}
         </div>
-      )}
+
+        {/* ACCESS CHECK */}
+        {!hasAccess ? (
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.7)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '24px',
+            backdropFilter: 'blur(24px)',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
+            padding: '4rem 2rem',
+            textAlign: 'center',
+            maxWidth: '620px',
+            margin: '3rem auto'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.6rem',
+              marginBottom: '1.2rem'
+            }}>
+              🔒
+            </div>
+            <h2 style={{ fontSize: '1.7rem', fontWeight: '800', margin: '0 0 0.6rem 0' }}>Membership Pass Required</h2>
+            <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem auto' }}>
+              Daily morning and evening live broadcasts, posture correction Q&A, and streak telemetry are reserved for active subscribers.
+            </p>
+            <Link
+              to="/pricing"
+              style={{
+                display: 'inline-block',
+                padding: '0.9rem 2.2rem',
+                borderRadius: '12px',
+                background: '#0284c7',
+                color: '#fff',
+                textDecoration: 'none',
+                fontWeight: '800',
+                fontSize: '0.95rem',
+                boxShadow: '0 10px 25px -5px rgba(2, 132, 199, 0.5)'
+              }}
+            >
+              Choose a Pass to Unlock →
+            </Link>
+          </div>
+        ) : (
+          /* LIVE STUDIO VIEWPORT & CHAT */
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) 380px',
+            gap: '24px',
+            alignItems: 'start'
+          }}>
+            {/* BROADCASTER PLAYER */}
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '24px',
+              overflow: 'hidden',
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)'
+            }}>
+              {/* VIDEO HEADER BAR */}
+              <div style={{
+                padding: '1.2rem 1.6rem',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: '800' }}>
+                    {liveSession?.title || 'Daily Surya & Pranayama Stream'}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
+                    Lead Instructor: <strong style={{ color: '#38bdf8' }}>{liveSession?.instructor_name || 'Acharya Dev'}</strong> • Tier: <strong style={{ color: '#34d399' }}>{liveSession?.level || 'All Levels'}</strong>
+                  </p>
+                </div>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(34, 197, 94, 0.12)',
+                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '0.74rem',
+                  fontWeight: '800',
+                  color: '#4ade80'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></span>
+                  BROADCASTING
+                </div>
+              </div>
+
+              {/* EMBEDDED IFRAME */}
+              <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
+                <iframe
+                  src={liveSession?.stream_url || 'https://meet.jit.si/YogaLive_Permanent_MainStudio'}
+                  title="YogaLive Studio Player"
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    border: 'none'
+                  }}
+                  allow="camera; microphone; fullscreen; display-capture; autoplay"
+                  allowFullScreen
+                />
+              </div>
+
+              {/* TELEMETRY FOOTER */}
+              <div style={{
+                padding: '1rem 1.6rem',
+                background: 'rgba(0, 0, 0, 0.35)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.8rem',
+                color: '#64748b'
+              }}>
+                <span>Session ID: {liveSession?.id ? liveSession.id.substring(0, 16) + '...' : 'Permanent Main Room'}</span>
+                <span>WebRTC Mesh • Full Duplex Audio</span>
+              </div>
+            </div>
+
+            {/* LIVE POSTURE Q&A CHAT */}
+            <div style={{
+              background: 'rgba(15, 23, 42, 0.65)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '24px',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '620px',
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
+              overflow: 'hidden'
+            }}>
+              {/* CHAT HEADER */}
+              <div style={{
+                padding: '1.2rem 1.4rem',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: '800' }}>Live Posture Q&A</h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.74rem', color: '#64748b' }}>Direct channel to instructor</p>
+                </div>
+                <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                  {messages.length} MSGS
+                </span>
+              </div>
+
+              {/* CHAT FEED */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '1.2rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                {messages.length === 0 ? (
+                  <div style={{ textAlign: 'center', margin: 'auto 0', color: '#64748b', fontSize: '0.85rem' }}>
+                    <p style={{ margin: 0 }}>No messages yet.</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '0.76rem' }}>Ask posture questions or confirm your alignment!</p>
+                  </div>
+                ) : (
+                  messages.map((m, idx) => {
+                    const isSelf = m.user_id === user?.id;
+                    return (
+                      <div
+                        key={m.id || idx}
+                        style={{
+                          background: isSelf ? 'rgba(2, 132, 199, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                          border: isSelf ? '1px solid rgba(2, 132, 199, 0.3)' : '1px solid rgba(255, 255, 255, 0.06)',
+                          borderRadius: '12px',
+                          padding: '8px 12px',
+                          maxWidth: '90%',
+                          alignSelf: isSelf ? 'flex-end' : 'flex-start'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', marginBottom: '2px' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: '800', color: isSelf ? '#38bdf8' : '#cbd5e1' }}>
+                            {m.sender_name}
+                          </span>
+                          <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                            {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.86rem', color: '#f8fafc', lineHeight: 1.45 }}>
+                          {m.message}
+                        </p>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* CHAT INPUT */}
+              <form onSubmit={handleSendChat} style={{
+                padding: '0.9rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                display: 'flex',
+                gap: '8px',
+                background: 'rgba(0, 0, 0, 0.25)'
+              }}>
+                <input
+                  type="text"
+                  placeholder="Ask instructor about asana alignment..."
+                  value={newMsg}
+                  onChange={(e) => setNewMsg(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.9rem',
+                    fontSize: '0.86rem',
+                    color: '#fff',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    padding: '0.65rem 1.1rem',
+                    background: '#0284c7',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: '800',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

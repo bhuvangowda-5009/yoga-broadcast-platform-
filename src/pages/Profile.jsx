@@ -25,7 +25,6 @@ export default function Profile() {
 
   async function loadProfileAndHabits() {
     try {
-      // 1. Fetch attendance records
       const { data: attData, error } = await supabase
         .from('attendance')
         .select(`
@@ -42,7 +41,6 @@ export default function Profile() {
       if (error) throw error;
 
       if (attData) {
-        // Sort in memory by date descending to handle timestamp fallbacks cleanly
         const sorted = [...attData].sort((a, b) => {
           const timeA = new Date(a.created_at || 0).getTime();
           const timeB = new Date(b.created_at || 0).getTime();
@@ -63,7 +61,6 @@ export default function Profile() {
       return;
     }
 
-    // Filter unique calendar dates in YYYY-MM-DD
     const uniqueDates = Array.from(
       new Set(
         records
@@ -73,7 +70,6 @@ export default function Profile() {
     ).sort().reverse();
 
     if (uniqueDates.length === 0) {
-      // If records exist but have no valid date yet, fallback to at least 1 session
       setConsecutiveStreak(records.length > 0 ? 1 : 0);
       return;
     }
@@ -81,7 +77,6 @@ export default function Profile() {
     const today = new Date().toISOString().split('T')[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-    // If user hasn't logged attendance today or yesterday, consecutive streak broke
     if (uniqueDates[0] !== today && uniqueDates[0] !== yesterday) {
       setConsecutiveStreak(0);
       return;
@@ -124,218 +119,308 @@ export default function Profile() {
 
       await refreshUserData(user.id);
       setIsEditingPhone(false);
-      setMsg('✅ Phone number updated successfully!');
+      setMsg('✅ Alert phone contact updated successfully!');
     } catch (err) {
-      setMsg(`Failed to update phone: ${err.message}`);
+      setMsg(`Failed to update contact: ${err.message}`);
     } finally {
       setSaving(false);
     }
   }
 
+  const role = profile?.role || 'subscriber';
+  const isStaff = role === 'admin' || role === 'instructor' || role === 'coordinator';
+
   return (
-    <div
-      style={{
-        maxWidth: '850px',
-        margin: '2.5rem auto',
-        padding: '2rem',
-        fontFamily: 'sans-serif',
-        background: '#fff',
-        border: '1px solid #cbd5e1',
-        borderRadius: '8px',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-      }}
-    >
-      <div style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '1.2rem', marginBottom: '1.5rem' }}>
-        <h2 style={{ margin: '0 0 0.4rem 0', color: '#0f172a' }}>
-          Subscriber Profile & Habit Tracking
-        </h2>
-        <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
-          Manage your account information and monitor your live practice streak.
-        </p>
-      </div>
-
-      {msg && (
-        <div
-          style={{
-            background: msg.includes('Failed') ? '#fee2e2' : '#dcfce7',
-            color: msg.includes('Failed') ? '#b91c1c' : '#15803d',
-            padding: '0.75rem 1rem',
-            borderRadius: '6px',
-            marginBottom: '1.2rem',
-            fontSize: '0.9rem',
-            fontWeight: '500'
-          }}
-        >
-          {msg}
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at 50% 0%, #172554 0%, #090d16 60%, #030712 100%)',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: '#f8fafc',
+      padding: '3rem 1.5rem 6rem 1.5rem'
+    }}>
+      <div style={{ maxWidth: '980px', margin: '0 auto' }}>
+        {/* HEADER */}
+        <div style={{ marginBottom: '2.5rem' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(56, 189, 248, 0.1)',
+            border: '1px solid rgba(56, 189, 248, 0.2)',
+            padding: '4px 12px',
+            borderRadius: '16px',
+            marginBottom: '0.8rem'
+          }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: '800', letterSpacing: '0.8px', color: '#38bdf8' }}>
+              {isStaff ? 'STAFF IDENTITY & DIRECTORY' : 'PRACTITIONER PROFILE & HABITS'}
+            </span>
+          </div>
+          <h1 style={{ fontSize: '2.4rem', fontWeight: '900', letterSpacing: '-0.8px', margin: '0 0 0.4rem 0' }}>
+            {role === 'admin' ? 'Chief Administrator Workspace' : role === 'instructor' ? 'Instructor Profile' : role === 'coordinator' ? 'Coordinator Profile' : 'Subscriber Profile & Tracking'}
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: '0.95rem', margin: 0 }}>
+            {isStaff ? 'Full system bypass active. Unrestricted access to broadcasts, controls, and platform tools.' : 'Manage your contact details and track your daily live attendance streak.'}
+          </p>
         </div>
-      )}
 
-      {/* USER DETAILS CARD */}
-      <div
-        style={{
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: '8px',
-          padding: '1.5rem',
+        {msg && (
+          <div style={{
+            background: msg.includes('Failed') ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+            border: msg.includes('Failed') ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+            color: msg.includes('Failed') ? '#f87171' : '#34d399',
+            padding: '0.85rem 1.2rem',
+            borderRadius: '12px',
+            fontSize: '0.86rem',
+            fontWeight: '600',
+            marginBottom: '2rem'
+          }}>
+            {msg}
+          </div>
+        )}
+
+        {/* PROFILE CARD */}
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.65)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '20px',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 20px 50px -15px rgba(0, 0, 0, 0.6)',
+          padding: '2rem 2.4rem',
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: '1.2rem',
+          gap: '2rem',
           marginBottom: '2rem'
-        }}
-      >
-        <div>
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
-            Full Name
-          </span>
-          <p style={{ margin: '0.2rem 0 0.8rem 0', fontSize: '1.05rem', fontWeight: 'bold', color: '#1e293b' }}>
-            {profile?.name || user?.email?.split('@')[0]}
-          </p>
-
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
-            Registered Email
-          </span>
-          <p style={{ margin: '0.2rem 0 0 0', fontSize: '1rem', color: '#334155' }}>
-            {user?.email}
-          </p>
-        </div>
-
-        <div>
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
-            WhatsApp / Alert Phone
-          </span>
-          
-          {!isEditingPhone ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '0.2rem', marginBottom: '0.8rem' }}>
-              <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#1e293b' }}>
-                {profile?.phone || 'Not configured'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsEditingPhone(true)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#0284c7',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '0.82rem',
-                  textDecoration: 'underline'
-                }}
-              >
-                Edit
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleUpdatePhone} style={{ display: 'flex', gap: '6px', marginTop: '0.3rem', marginBottom: '0.8rem' }}>
-              <input
-                type="tel"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value)}
-                placeholder="+919876543210"
-                required
-                style={{ padding: '0.4rem 0.6rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.9rem', width: '150px' }}
-              />
-              <button
-                type="submit"
-                disabled={saving}
-                style={{ padding: '0.4rem 0.8rem', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.82rem' }}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPhoneInput(profile?.phone || '');
-                  setIsEditingPhone(false);
-                }}
-                style={{ padding: '0.4rem 0.6rem', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.82rem' }}
-              >
-                Cancel
-              </button>
-            </form>
-          )}
-
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>
-            Membership Status
-          </span>
-          <p style={{ margin: '0.2rem 0 0 0' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                fontSize: '0.82rem',
-                fontWeight: 'bold',
-                background: subscription ? '#dcfce7' : '#fee2e2',
-                color: subscription ? '#166534' : '#b91c1c'
-              }}
-            >
-              {subscription ? 'Active Paid Subscriber' : 'No Active Pass'}
+        }}>
+          <div>
+            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', letterSpacing: '0.8px' }}>
+              ACCOUNT NAME
             </span>
-          </p>
-        </div>
-      </div>
+            <p style={{ margin: '0.3rem 0 1.2rem 0', fontSize: '1.25rem', fontWeight: '800', color: '#f8fafc' }}>
+              {profile?.name || user?.email?.split('@')[0]}
+            </p>
 
-      {/* DYNAMIC STREAK HERO CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '1.2rem', textAlign: 'center' }}>
-          <span style={{ fontSize: '2rem' }}>🔥</span>
-          <h3 style={{ margin: '0.4rem 0 0.2rem 0', color: '#1e40af', fontSize: '1.8rem' }}>
-            {consecutiveStreak} {consecutiveStreak === 1 ? 'Day' : 'Days'}
-          </h3>
-          <p style={{ margin: 0, color: '#3b82f6', fontSize: '0.85rem', fontWeight: '600' }}>
-            Current Daily Streak
-          </p>
-        </div>
+            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', letterSpacing: '0.8px' }}>
+              SYSTEM EMAIL
+            </span>
+            <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.95rem', color: '#cbd5e1', fontWeight: '500' }}>
+              {user?.email}
+            </p>
+          </div>
 
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '1.2rem', textAlign: 'center' }}>
-          <span style={{ fontSize: '2rem' }}>🧘</span>
-          <h3 style={{ margin: '0.4rem 0 0.2rem 0', color: '#166534', fontSize: '1.8rem' }}>
-            {attendance.length}
-          </h3>
-          <p style={{ margin: 0, color: '#15803d', fontSize: '0.85rem', fontWeight: '600' }}>
-            Total Sessions Completed
-          </p>
-        </div>
-      </div>
+          <div>
+            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', letterSpacing: '0.8px' }}>
+              CONTACT PHONE (WHATSAPP ALERTS)
+            </span>
 
-      {/* ATTENDANCE HISTORY TABLE */}
-      <h3 style={{ color: '#0f172a', marginBottom: '0.8rem' }}>Your Attendance History</h3>
-      <div style={{ border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #cbd5e1' }}>
-              <th style={{ padding: '10px 14px', fontSize: '0.85rem', color: '#475569' }}>Session</th>
-              <th style={{ padding: '10px 14px', fontSize: '0.85rem', color: '#475569' }}>Date</th>
-              <th style={{ padding: '10px 14px', fontSize: '0.85rem', color: '#475569' }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attendance.length === 0 ? (
-              <tr>
-                <td colSpan="3" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
-                  No sessions attended yet. Visit "Today's Practice" to join a live session!
-                </td>
-              </tr>
+            {!isEditingPhone ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '0.3rem', marginBottom: '1.2rem' }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#38bdf8' }}>
+                  {profile?.phone || 'Not configured'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPhone(true)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#94a3b8',
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Edit Contact
+                </button>
+              </div>
             ) : (
-              attendance.map((att) => (
-                <tr key={att.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '10px 14px', fontWeight: 'bold', color: '#1e293b', fontSize: '0.9rem' }}>
-                    {att.sessions?.title || 'Daily Surya Flow Session'}
-                  </td>
-                  <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '0.85rem' }}>
-                    {att.created_at ? new Date(att.created_at).toLocaleDateString() : 'Today'}
-                  </td>
-                  <td style={{ padding: '10px 14px' }}>
-                    <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 'bold' }}>
-                      Completed ✓
-                    </span>
+              <form onSubmit={handleUpdatePhone} style={{ display: 'flex', gap: '8px', marginTop: '0.4rem', marginBottom: '1.2rem' }}>
+                <input
+                  type="tel"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  placeholder="+919876543210"
+                  required
+                  style={{
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    borderRadius: '8px',
+                    padding: '0.45rem 0.8rem',
+                    fontSize: '0.88rem',
+                    color: '#fff',
+                    outline: 'none',
+                    width: '160px'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={saving}
+                  style={{
+                    padding: '0.45rem 0.9rem',
+                    background: '#10b981',
+                    color: '#0f172a',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontWeight: '800',
+                    fontSize: '0.78rem'
+                  }}
+                >
+                  {saving ? '...' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhoneInput(profile?.phone || '');
+                    setIsEditingPhone(false);
+                  }}
+                  style={{
+                    padding: '0.45rem 0.8rem',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    color: '#94a3b8',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem'
+                  }}
+                >
+                  Cancel
+                </button>
+              </form>
+            )}
+
+            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#64748b', letterSpacing: '0.8px' }}>
+              {isStaff ? 'SYSTEM CREDENTIAL' : 'MEMBERSHIP ACCESS PASS'}
+            </span>
+            <p style={{ margin: '0.3rem 0 0 0' }}>
+              {role === 'admin' ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.35)', color: '#fb7185' }}>
+                  🛡️ Chief Administrator (Full Bypass Access)
+                </span>
+              ) : role === 'instructor' ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', color: '#34d399' }}>
+                  🧘 Certified Instructor (Studio Privileges)
+                </span>
+              ) : role === 'coordinator' ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.35)', color: '#c084fc' }}>
+                  📋 Session Coordinator (Operations Clearance)
+                </span>
+              ) : subscription ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.35)', color: '#38bdf8' }}>
+                  ✓ Active Paid Subscriber ({subscription.plan_id.toUpperCase()})
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', background: 'rgba(248, 113, 113, 0.12)', border: '1px solid rgba(248, 113, 113, 0.25)', color: '#f87171' }}>
+                  ✕ Free Tier (No Active Pass)
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* STREAK CARDS */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '2.5rem' }}>
+          <div style={{
+            background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.4) 100%)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '20px',
+            padding: '2rem',
+            textAlign: 'center',
+            backdropFilter: 'blur(16px)'
+          }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', marginBottom: '0.8rem' }}>
+              🔥
+            </div>
+            <h2 style={{ fontSize: '2.8rem', fontWeight: '900', margin: '0 0 0.2rem 0', color: '#fbbf24', letterSpacing: '-1px' }}>
+              {consecutiveStreak} {consecutiveStreak === 1 ? 'Day' : 'Days'}
+            </h2>
+            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.8px', color: '#d97706' }}>
+              DAILY PRACTICE STREAK
+            </p>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.4) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: '20px',
+            padding: '2rem',
+            textAlign: 'center',
+            backdropFilter: 'blur(16px)'
+          }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem', marginBottom: '0.8rem' }}>
+              🧘
+            </div>
+            <h2 style={{ fontSize: '2.8rem', fontWeight: '900', margin: '0 0 0.2rem 0', color: '#34d399', letterSpacing: '-1px' }}>
+              {attendance.length}
+            </h2>
+            <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: '800', letterSpacing: '0.8px', color: '#059669' }}>
+              SESSIONS ATTENDED
+            </p>
+          </div>
+        </div>
+
+        {/* ATTENDANCE TABLE */}
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.65)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '20px',
+          overflow: 'hidden',
+          backdropFilter: 'blur(20px)'
+        }}>
+          <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800' }}>Attendance History</h3>
+            <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.84rem', color: '#64748b' }}>
+              Live stream attendance records from public.attendance table.
+            </p>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: 'rgba(0, 0, 0, 0.25)', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', letterSpacing: '0.8px' }}>SESSION TITLE</th>
+                <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', letterSpacing: '0.8px' }}>DATE RECORDED</th>
+                <th style={{ padding: '14px 20px', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', letterSpacing: '0.8px' }}>STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {attendance.length === 0 ? (
+                <tr>
+                  <td colSpan="3" style={{ padding: '3rem 2rem', textAlign: 'center', color: '#64748b', fontSize: '0.9rem' }}>
+                    No sessions logged yet.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                attendance.map((att) => (
+                  <tr key={att.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                    <td style={{ padding: '16px 20px', fontWeight: '700', color: '#f8fafc', fontSize: '0.92rem' }}>
+                      {att.sessions?.title || 'Daily Surya Flow Session'}
+                    </td>
+                    <td style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.86rem' }}>
+                      {att.created_at ? new Date(att.created_at).toLocaleDateString() : 'Today'}
+                    </td>
+                    <td style={{ padding: '16px 20px' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        color: '#34d399',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.76rem',
+                        fontWeight: '800'
+                      }}>
+                        Completed ✓
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

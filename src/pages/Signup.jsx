@@ -23,11 +23,9 @@ export default function Signup() {
       }
 
       const isStaffApplication = desiredRole === 'instructor' || desiredRole === 'coordinator';
-      // If staff, their base role stays 'subscriber' until admin approves their applied_role
-      const actualRole = isStaffApplication ? 'subscriber' : 'subscriber';
+      const actualRole = 'subscriber';
       const isApproved = !isStaffApplication;
 
-      // 1. Sign up auth account
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -44,7 +42,6 @@ export default function Signup() {
 
       if (error) throw error;
 
-      // 2. Persist in public.users table
       if (data.user) {
         await supabase.from('users').upsert({
           id: data.user.id,
@@ -58,10 +55,9 @@ export default function Signup() {
         });
       }
 
-      // 3. For staff applications: log out immediately and show pending notice
       if (isStaffApplication) {
         await supabase.auth.signOut();
-        setMsg(`📋 Application Received! Your application for "${desiredRole.toUpperCase()}" has been sent to the Admin. You cannot access the ${desiredRole} portal until approved.`);
+        setMsg(`📋 Candidate Application Filed: Your submission for "${desiredRole.toUpperCase()}" is logged in Supabase. The Chief Admin must grant review approval before studio access is unlocked.`);
         setName('');
         setEmail('');
         setPhone('');
@@ -69,116 +65,231 @@ export default function Signup() {
         return;
       }
 
-      setMsg('🎉 Registration successful! Redirecting to login...');
+      setMsg('🎉 Profile Initialized! Routing to login portal...');
       setTimeout(() => navigate('/login'), 1500);
     } catch (err) {
-      setMsg(`Signup error: ${err.message}`);
+      setMsg(`Onboarding Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: '440px', margin: '3rem auto', padding: '2rem', border: '1px solid #cbd5e1', borderRadius: '8px', fontFamily: 'sans-serif', background: '#fff', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-      <h2 style={{ textAlign: 'center', margin: '0 0 0.5rem 0' }}>Join YogaLive</h2>
-      <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-        Create an account or apply for instructor/coordinator credentials.
-      </p>
-
-      {msg && (
-        <p style={{
-          background: msg.includes('Application Received') ? '#fef3c7' : msg.includes('successful') ? '#dcfce7' : '#fee2e2',
-          color: msg.includes('Application Received') ? '#92400e' : msg.includes('successful') ? '#15803d' : '#b91c1c',
-          padding: '0.75rem',
-          borderRadius: '4px',
-          fontSize: '0.85rem',
-          lineHeight: '1.4'
-        }}>
-          {msg}
-        </p>
-      )}
-
-      <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 'bold', marginBottom: '4px', color: '#334155' }}>Full Name</label>
-          <input
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 'bold', marginBottom: '4px', color: '#334155' }}>Email Address</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 'bold', marginBottom: '4px', color: '#334155' }}>Phone Number</label>
-          <input
-            type="tel"
-            required
-            placeholder="+919876543210"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 'bold', marginBottom: '4px', color: '#334155' }}>Password</label>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 'bold', marginBottom: '4px', color: '#334155' }}>Account Type</label>
-          <select
-            value={desiredRole}
-            onChange={(e) => setDesiredRole(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
-          >
-            <option value="subscriber">Subscriber (Instant Access)</option>
-            <option value="instructor">Instructor (Requires Admin Approval)</option>
-            <option value="coordinator">Coordinator (Requires Admin Approval)</option>
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '0.75rem',
-            background: '#0284c7',
+    <div style={{
+      minHeight: '100vh',
+      background: 'radial-gradient(ellipse at 20% 80%, #064e3b 0%, #090d16 60%, #030712 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '2rem 1.5rem',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: '#f8fafc'
+    }}>
+      <div style={{
+        maxWidth: '520px',
+        width: '100%',
+        borderRadius: '24px',
+        overflow: 'hidden',
+        background: 'rgba(15, 23, 42, 0.75)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        backdropFilter: 'blur(24px)',
+        boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px -10px rgba(16, 185, 129, 0.2)',
+        padding: '3rem 2.8rem'
+      }}>
+        {/* HEADER */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: '900',
+            fontSize: '1.3rem',
             color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontWeight: 'bold',
-            marginTop: '0.5rem',
-            fontSize: '0.9rem'
-          }}
-        >
-          {loading ? 'Processing...' : desiredRole === 'subscriber' ? 'Create Account' : 'Submit Application'}
-        </button>
-      </form>
+            boxShadow: '0 0 20px rgba(16, 185, 129, 0.5)',
+            marginBottom: '1rem'
+          }}>
+            ॐ
+          </div>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.5px', margin: '0 0 0.5rem 0' }}>
+            Initialize Membership
+          </h2>
+          <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: 0 }}>
+            Join as a dedicated practitioner or apply for live broadcast staff roles.
+          </p>
+        </div>
 
-      <p style={{ textAlign: 'center', fontSize: '0.85rem', marginTop: '1.2rem', color: '#64748b' }}>
-        Already registered? <Link to="/login" style={{ color: '#0284c7', fontWeight: 'bold', textDecoration: 'none' }}>Log in</Link>
-      </p>
+        {msg && (
+          <div style={{
+            background: msg.includes('Application') ? 'rgba(245, 158, 11, 0.12)' : msg.includes('Initialized') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+            border: msg.includes('Application') ? '1px solid rgba(245, 158, 11, 0.3)' : msg.includes('Initialized') ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+            color: msg.includes('Application') ? '#fbbf24' : msg.includes('Initialized') ? '#34d399' : '#f87171',
+            padding: '0.85rem 1rem',
+            borderRadius: '12px',
+            fontSize: '0.84rem',
+            lineHeight: 1.5,
+            marginBottom: '1.5rem'
+          }}>
+            {msg}
+          </div>
+        )}
+
+        <form onSubmit={handleSignup} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.5px', marginBottom: '6px' }}>
+              PRACTITIONER / INSTRUCTOR NAME
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Bhuvan Gowda"
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '10px',
+                padding: '0.8rem 1rem',
+                fontSize: '0.9rem',
+                color: '#fff',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                EMAIL ADDRESS
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@domain.com"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '10px',
+                  padding: '0.8rem 1rem',
+                  fontSize: '0.9rem',
+                  color: '#fff',
+                  outline: 'none'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                WHATSAPP / ALERTS
+              </label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  background: 'rgba(0, 0, 0, 0.25)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: '10px',
+                  padding: '0.8rem 1rem',
+                  fontSize: '0.9rem',
+                  color: '#fff',
+                  outline: 'none'
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.5px', marginBottom: '6px' }}>
+              ACCOUNT TYPE & ROLE INTENT
+            </label>
+            <select
+              value={desiredRole}
+              onChange={(e) => setDesiredRole(e.target.value)}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '10px',
+                padding: '0.8rem 1rem',
+                fontSize: '0.9rem',
+                color: '#fff',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="subscriber">Subscriber Pass (Direct Student Access)</option>
+              <option value="instructor">Instructor Studio (Subject to Admin Review)</option>
+              <option value="coordinator">Session Coordinator (Subject to Admin Review)</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', letterSpacing: '0.5px', marginBottom: '6px' }}>
+              CREATE MASTER KEY (PASSWORD)
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••••"
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                background: 'rgba(0, 0, 0, 0.25)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                borderRadius: '10px',
+                padding: '0.8rem 1rem',
+                fontSize: '0.9rem',
+                color: '#fff',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '0.9rem',
+              borderRadius: '10px',
+              border: 'none',
+              background: desiredRole === 'subscriber' ? '#10b981' : '#06b6d4',
+              color: '#0f172a',
+              fontWeight: '800',
+              fontSize: '0.95rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              boxShadow: desiredRole === 'subscriber' ? '0 8px 25px -4px rgba(16, 185, 129, 0.35)' : '0 8px 25px -4px rgba(6, 182, 212, 0.35)',
+              marginTop: '0.8rem',
+              transition: 'transform 0.15s ease'
+            }}
+          >
+            {loading ? 'Filing Application...' : desiredRole === 'subscriber' ? 'Complete Subscriber Registration' : 'Submit Staff Application for Review'}
+          </button>
+        </form>
+
+        <p style={{ fontSize: '0.82rem', color: '#64748b', textAlign: 'center', marginTop: '1.8rem', marginBottom: 0 }}>
+          Already have verified credentials?{' '}
+          <Link to="/login" style={{ color: '#38bdf8', fontWeight: '700', textDecoration: 'none' }}>
+            Open Portal
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
