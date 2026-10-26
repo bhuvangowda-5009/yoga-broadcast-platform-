@@ -21,6 +21,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
+      // 1. Load User Profile
       const { data: prof } = await supabase
         .from('users')
         .select('*')
@@ -28,20 +29,25 @@ export const AuthProvider = ({ children }) => {
         .maybeSingle();
       setProfile(prof || null);
 
+      // 2. Load Subscription (Must be active and unexpired)
+      const nowIso = new Date().toISOString();
       const { data: sub } = await supabase
         .from('subscriptions')
         .select('*')
         .eq('user_id', userId)
         .eq('status', 'active')
+        .gte('end_date', nowIso)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       setSubscription(sub || null);
 
-      // Calculate 1-Day Free Demo window (24 hours from account creation)
+      // 3. Calculate Day 1 Free Demo (Valid strictly for the first 24 hours of account creation)
       if (prof?.created_at) {
-        const createdTime = new Date(prof.created_at).getTime();
-        const now = Date.now();
-        const diffHours = (now - createdTime) / (1000 * 60 * 60);
-        setIsDemoActive(diffHours <= 24);
+        const createdMs = new Date(prof.created_at).getTime();
+        const currentMs = Date.now();
+        const elapsedHours = (currentMs - createdMs) / (1000 * 60 * 60);
+        setIsDemoActive(elapsedHours <= 24);
       } else {
         setIsDemoActive(false);
       }
@@ -98,7 +104,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, subscription, isDemoActive, loading, refreshUserData, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        subscription,
+        isDemoActive,
+        loading,
+        refreshUserData,
+        signOut
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

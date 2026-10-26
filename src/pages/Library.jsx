@@ -3,93 +3,119 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 
+const DEFAULT_RECORDINGS = [
+  {
+    id: 'rec-1',
+    title: 'Surya Namaskar A & B (Classic Sun Salutations)',
+    instructor_name: 'Acharya Dev',
+    level: 'Beginner',
+    duration: '30 mins',
+    date: 'Oct 25, 2026',
+    thumbnail: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=700&q=80',
+    embed_url: 'https://www.youtube.com/embed/v7AYKMP6rOE'
+  },
+  {
+    id: 'rec-2',
+    title: 'Ashtanga Primary Series & Bandha Flow',
+    instructor_name: 'Mira Devi',
+    level: 'Advanced',
+    duration: '60 mins',
+    date: 'Oct 24, 2026',
+    thumbnail: 'https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=700&q=80',
+    embed_url: 'https://www.youtube.com/embed/inpok4MKVLM'
+  },
+  {
+    id: 'rec-3',
+    title: 'Pranayama & Kundalini Breath Control',
+    instructor_name: 'Arjun Varma',
+    level: 'All Levels',
+    duration: '35 mins',
+    date: 'Oct 23, 2026',
+    thumbnail: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=700&q=80',
+    embed_url: 'https://www.youtube.com/embed/b1H3xO3x_Js'
+  },
+  {
+    id: 'rec-4',
+    title: 'Gentle Evening Restorative & Yoga Nidra',
+    instructor_name: 'Elena Rostova',
+    level: 'Beginner',
+    duration: '40 mins',
+    date: 'Oct 22, 2026',
+    thumbnail: 'https://images.unsplash.com/photo-1510894347713-fc3ed6fdf539?auto=format&fit=crop&w=700&q=80',
+    embed_url: 'https://www.youtube.com/embed/4pLUleLdwY4'
+  },
+  {
+    id: 'rec-5',
+    title: 'Dynamic Vinyasa Flow: Core & Hip Opening',
+    instructor_name: 'Acharya Dev',
+    level: 'Intermediate',
+    duration: '50 mins',
+    date: 'Oct 21, 2026',
+    thumbnail: 'https://images.unsplash.com/photo-1552196563-55235889758e?auto=format&fit=crop&w=700&q=80',
+    embed_url: 'https://www.youtube.com/embed/sTANio_2E0Q'
+  }
+];
+
 export default function Library() {
   const { profile, subscription } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedVideo, setSelectedVideo] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const role = profile?.role || 'subscriber';
   const isStaff = role === 'admin' || role === 'instructor' || role === 'coordinator';
-  // Strictly requires paid subscription (or staff) - Demo users CANNOT access library
+  // Strictly requires paid subscription (or staff role) - Demo users cannot access library
   const hasAccess = !!subscription || isStaff;
 
-  const defaultRecordings = [
-    {
-      id: 'rec-1',
-      title: 'Sunrise Ashtanga Primary Series & Bandha Alignment',
-      instructor_name: 'Acharya Dev',
-      level: 'Intermediate',
-      duration: '45 mins',
-      date: 'Oct 23, 2026',
-      thumbnail: 'https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=700&q=80',
-      embed_url: 'https://www.youtube.com/embed/v7AYKMP6rOE'
-    },
-    {
-      id: 'rec-2',
-      title: 'Deep Pranayama & Kundalini Breathwork Workshop',
-      instructor_name: 'Mira Devi',
-      level: 'All Levels',
-      duration: '35 mins',
-      date: 'Oct 22, 2026',
-      thumbnail: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=700&q=80',
-      embed_url: 'https://www.youtube.com/embed/inpok4MKVLM'
-    },
-    {
-      id: 'rec-3',
-      title: 'Vinyasa Flow: Core Strength & Spinal Mobility',
-      instructor_name: 'Arjun Varma',
-      level: 'Advanced',
-      duration: '60 mins',
-      date: 'Oct 21, 2026',
-      thumbnail: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=700&q=80',
-      embed_url: 'https://www.youtube.com/embed/b1H3xO3x_Js'
-    },
-    {
-      id: 'rec-4',
-      title: 'Gentle Evening Restorative & Nidra Meditation',
-      instructor_name: 'Acharya Dev',
-      level: 'Beginner',
-      duration: '30 mins',
-      date: 'Oct 20, 2026',
-      thumbnail: 'https://images.unsplash.com/photo-1510894347713-fc3ed6fdf539?auto=format&fit=crop&w=700&q=80',
-      embed_url: 'https://www.youtube.com/embed/4pLUleLdwY4'
-    }
-  ];
-
   useEffect(() => {
-    async function loadSessions() {
-      setLoading(true);
-      const { data } = await supabase
-        .from('sessions')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (data && data.length > 0) {
-        const formatted = data.map((s, idx) => ({
-          id: s.id,
-          title: s.title || 'Recorded Masterclass Flow',
-          instructor_name: s.instructor_name || 'Acharya Dev',
-          level: s.level || 'All Levels',
-          duration: '45 mins',
-          date: s.created_at ? new Date(s.created_at).toLocaleDateString() : 'Archived',
-          thumbnail: defaultRecordings[idx % defaultRecordings.length].thumbnail,
-          embed_url: s.stream_url?.includes('embed') ? s.stream_url : 'https://www.youtube.com/embed/v7AYKMP6rOE'
-        }));
-        setSessions(formatted);
-      } else {
-        setSessions(defaultRecordings);
-      }
-      setLoading(false);
-    }
-
     loadSessions();
   }, []);
 
-  const filteredSessions = activeFilter === 'All' 
-    ? sessions 
-    : sessions.filter(s => s.level.toLowerCase() === activeFilter.toLowerCase());
+  async function loadSessions() {
+    try {
+      // Pull all sessions marked as recorded
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('is_recorded', true)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        // Map database records into display objects
+        const dbItems = data.map((s, idx) => ({
+          id: s.id,
+          title: s.title || 'Recorded Yoga Masterclass',
+          instructor_name: s.instructor_name || 'YogaLive Master',
+          level: s.level || 'All Levels',
+          duration: s.duration || '45 mins',
+          date: s.created_at ? new Date(s.created_at).toLocaleDateString() : 'Archived',
+          thumbnail: s.thumbnail || DEFAULT_RECORDINGS[idx % DEFAULT_RECORDINGS.length].thumbnail,
+          embed_url: s.recording_url || s.stream_url || DEFAULT_RECORDINGS[idx % DEFAULT_RECORDINGS.length].embed_url
+        }));
+
+        // Deduplicate in memory by title to guarantee clean catalog
+        const uniqueTitles = new Set();
+        const deduplicated = [];
+        for (const item of dbItems) {
+          if (!uniqueTitles.has(item.title.toLowerCase())) {
+            uniqueTitles.add(item.title.toLowerCase());
+            deduplicated.push(item);
+          }
+        }
+
+        setSessions(deduplicated);
+      } else {
+        setSessions(DEFAULT_RECORDINGS);
+      }
+    } catch (err) {
+      console.warn('Library loading fallback:', err);
+      setSessions(DEFAULT_RECORDINGS);
+    }
+  }
+
+  const filteredSessions = activeFilter === 'All'
+    ? sessions
+    : sessions.filter((s) => s.level.toLowerCase() === activeFilter.toLowerCase());
 
   return (
     <div style={{
@@ -148,7 +174,8 @@ export default function Library() {
                     color: active ? '#fff' : '#94a3b8',
                     fontWeight: active ? '800' : '600',
                     fontSize: '0.78rem',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   {lvl}
@@ -158,7 +185,7 @@ export default function Library() {
           </div>
         </div>
 
-        {/* LOCKED VAULT PROMPT FOR NON-PAID USERS */}
+        {/* LOCKED VAULT PROMPT IF NOT PAID */}
         {!hasAccess ? (
           <div style={{
             background: 'rgba(15, 23, 42, 0.75)',
@@ -189,7 +216,7 @@ export default function Library() {
               Vault Reserved For Paid Subscribers
             </h2>
             <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem auto' }}>
-              The 1-Day Free Demo includes live daily broadcasts, but recorded session archives are reserved for members holding an active subscription pass.
+              The 1-Day Free Demo includes live daily broadcasts, but recorded session archives require an active paid subscription pass.
             </p>
             <Link
               to="/pricing"
@@ -209,7 +236,7 @@ export default function Library() {
             </Link>
           </div>
         ) : (
-          /* VIDEO CARDS GRID (PAID SUBSCRIBERS ONLY) */
+          /* VIDEO GRID */
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
@@ -227,9 +254,18 @@ export default function Library() {
                   boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.6)',
                   display: 'flex',
                   flexDirection: 'column',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'transform 0.2s ease, border-color 0.2s ease'
                 }}
                 onClick={() => setSelectedVideo(rec)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                }}
               >
                 <div style={{ position: 'relative', width: '100%', height: '170px', background: '#000', overflow: 'hidden' }}>
                   <img
@@ -302,7 +338,7 @@ export default function Library() {
           </div>
         )}
 
-        {/* MODAL PLAYER */}
+        {/* MODAL VIDEO PLAYER */}
         {selectedVideo && hasAccess && (
           <div style={{
             position: 'fixed',
@@ -356,8 +392,7 @@ export default function Library() {
                   src={selectedVideo.embed_url}
                   title={selectedVideo.title}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 />
               </div>
 

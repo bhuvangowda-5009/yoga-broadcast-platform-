@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function Today() {
   const { user, profile, subscription, isDemoActive } = useAuth();
-  const [liveSession, setLiveSession] = useState(null);
+  const [currentSession, setCurrentSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
   const [attendanceLogged, setAttendanceLogged] = useState(false);
@@ -15,7 +15,6 @@ export default function Today() {
   const role = profile?.role || 'subscriber';
   const isStaffOrAdmin = role === 'admin' || role === 'instructor' || role === 'coordinator';
 
-  // Level access hierarchy
   function checkPracticeAccess(sessionLevel, userPlanId) {
     if (isStaffOrAdmin || isDemoActive) return true;
     if (!subscription) return false;
@@ -33,33 +32,25 @@ export default function Today() {
     return true;
   }
 
-  const hasAccess = checkPracticeAccess(liveSession?.level, subscription?.plan_id);
+  const hasAccess = checkPracticeAccess(currentSession?.level, subscription?.plan_id);
 
   useEffect(() => {
     let sessionChannel = null;
     let chatChannel = null;
 
     async function initializeStudio() {
+      // 1. Fetch latest session (live or recorded replay for today)
       let { data: session } = await supabase
         .from('sessions')
         .select('*')
-        .eq('is_live', true)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (!session) {
-        const { data: fallback } = await supabase
-          .from('sessions')
-          .select('*')
-          .eq('id', '00000000-0000-0000-0000-000000000001')
-          .maybeSingle();
-        session = fallback;
-      }
-
       if (session) {
-        setLiveSession(session);
+        setCurrentSession(session);
 
+        // Load messages for this session
         const { data: msgHistory } = await supabase
           .from('yoga_chat_messages')
           .select('*')
@@ -68,6 +59,7 @@ export default function Today() {
 
         if (msgHistory) setMessages(msgHistory);
 
+        // Realtime chat subscription
         const chatChannelName = `chat_${session.id}_${Math.random().toString(36).substring(2, 9)}`;
         chatChannel = supabase
           .channel(chatChannelName)
@@ -90,6 +82,7 @@ export default function Today() {
           )
           .subscribe();
 
+        // Mark attendance once per day
         if (user && !attendanceMarkedRef.current) {
           attendanceMarkedRef.current = true;
           supabase
@@ -111,6 +104,7 @@ export default function Today() {
         }
       }
 
+      // Realtime listener for session transitions (e.g., Live -> Replay)
       const sessionChannelName = `session_updates_${Math.random().toString(36).substring(2, 9)}`;
       sessionChannel = supabase
         .channel(sessionChannelName)
@@ -118,8 +112,8 @@ export default function Today() {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'sessions' },
           (payload) => {
-            if (payload?.new && payload.new.is_live) {
-              setLiveSession(payload.new);
+            if (payload?.new) {
+              setCurrentSession(payload.new);
             }
           }
         )
@@ -140,7 +134,7 @@ export default function Today() {
 
   async function handleSendChat(e) {
     e.preventDefault();
-    if (!newMsg.trim() || !user || !liveSession?.id || !hasAccess) return;
+    if (!newMsg.trim() || !user || !currentSession?.id || !hasAccess) return;
 
     const textToSend = newMsg.trim();
     setNewMsg('');
@@ -149,7 +143,7 @@ export default function Today() {
 
     const { error } = await supabase.from('yoga_chat_messages').insert([
       {
-        session_id: liveSession.id,
+        session_id: currentSession.id,
         user_id: user.id,
         sender_name: senderDisplay,
         message: textToSend
@@ -160,6 +154,9 @@ export default function Today() {
       console.error('Chat error:', error.message);
     }
   }
+
+  const isLive = currentSession?.is_live === true;
+  const activeStreamUrl = currentSession?.stream_url || (isLive ? 'https://meet.jit.si/YogaLive_Permanent_MainStudio' : 'https://www.youtube.com/embed/sTANio_2E0Q');
 
   return (
     <div style={{
@@ -178,14 +175,20 @@ export default function Today() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: isLive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                border: isLive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
                 padding: '4px 12px',
                 borderRadius: '20px'
               }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></span>
-                <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.8px', color: '#f87171' }}>
-                  SYNCHRONOUS STUDIO BROADCAST
+                <span style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: isLive ? '#ef4444' : '#22c55e',
+                  boxShadow: isLive ? '0 0 10px #ef4444' : '0 0 10px #22c55e'
+                }}></span>
+                <span style={{ fontSize: '0.72rem', fontWeight: '900', letterSpacing: '0.8px', color: isLive ? '#f87171' : '#34d399' }}>
+                  {isLive ? 'SYNCHRONOUS STUDIO BROADCAST (LIVE NOW)' : 'TODAY\'S PRACTICE COMPLETED (DAILY REPLAY ACTIVE)'}
                 </span>
               </div>
 
@@ -208,7 +211,9 @@ export default function Today() {
               Today's Live Practice
             </h1>
             <p style={{ color: '#94a3b8', fontSize: '0.92rem', margin: 0 }}>
-              Live instruction for <strong style={{ color: '#38bdf8' }}>{liveSession?.level || 'All Levels'}</strong> practitioners.
+              {isLive
+                ? `Join live camera instruction for ${currentSession?.level || 'All Levels'} practitioners.`
+                : `Today's live broadcast has ended. The full class recording is active for you to practice anytime today.`}
             </p>
           </div>
 
@@ -263,8 +268,8 @@ export default function Today() {
             </h2>
             <p style={{ color: '#94a3b8', fontSize: '0.95rem', lineHeight: 1.6, maxWidth: '480px', margin: '0 auto 2rem auto' }}>
               {!subscription
-                ? 'Your 1st-Day Free Trial window has concluded. Please select a practice tier to continue joining live broadcasts.'
-                : `This session requires access clearance for "${liveSession?.level || 'Advanced'}" level flows. Upgrade your pass to join.`}
+                ? 'Your 1st-Day Free Trial window has concluded. Please select a practice tier to continue viewing daily live broadcasts and replays.'
+                : `This session requires access clearance for "${currentSession?.level || 'Advanced'}" level flows. Upgrade your pass to join.`}
             </p>
             <Link
               to="/pricing"
@@ -284,14 +289,14 @@ export default function Today() {
             </Link>
           </div>
         ) : (
-          /* LIVE STUDIO VIEWPORT & CHAT */
+          /* VIDEO VIEWPORT & CHAT */
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr) 380px',
             gap: '24px',
             alignItems: 'start'
           }}>
-            {/* BROADCASTER PLAYER */}
+            {/* BROADCAST / REPLAY PLAYER */}
             <div style={{
               background: 'rgba(15, 23, 42, 0.65)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -311,32 +316,34 @@ export default function Today() {
               }}>
                 <div>
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: '800' }}>
-                    {liveSession?.title || 'Daily Surya & Pranayama Stream'}
+                    {currentSession?.title || 'Daily Live Yoga & Pranayama Studio'}
                   </h3>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: '#94a3b8' }}>
-                    Instructor: <strong style={{ color: '#38bdf8' }}>{liveSession?.instructor_name || 'Acharya Dev'}</strong> • Difficulty: <strong style={{ color: '#34d399' }}>{liveSession?.level || 'All Levels'}</strong>
+                    Instructor: <strong style={{ color: '#38bdf8' }}>{currentSession?.instructor_name || 'Acharya Dev'}</strong> • Tier: <strong style={{ color: '#34d399' }}>{currentSession?.level || 'All Levels'}</strong>
                   </p>
                 </div>
                 <div style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: 'rgba(34, 197, 94, 0.12)',
-                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                  background: isLive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+                  border: isLive ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(56, 189, 248, 0.3)',
                   padding: '4px 10px',
                   borderRadius: '6px',
                   fontSize: '0.74rem',
                   fontWeight: '800',
-                  color: '#4ade80'
+                  color: isLive ? '#f87171' : '#38bdf8'
                 }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></span>
-                  BROADCASTING
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isLive ? '#ef4444' : '#38bdf8' }}></span>
+                  {isLive ? 'TRANSMITTING LIVE' : 'DAY REPLAY UNLOCKED'}
                 </div>
               </div>
 
+              {/* DYNAMIC PLAYER (WebRTC camera when live, YouTube/Cloud recording when concluded) */}
               <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
                 <iframe
-                  src={liveSession?.stream_url || 'https://meet.jit.si/YogaLive_Permanent_MainStudio'}
+                  key={activeStreamUrl}
+                  src={activeStreamUrl}
                   title="YogaLive Studio Player"
                   style={{
                     position: 'absolute',
@@ -346,8 +353,7 @@ export default function Today() {
                     height: '100%',
                     border: 'none'
                   }}
-                  allow="camera; microphone; fullscreen; display-capture; autoplay"
-                  allowFullScreen
+                  allow="camera; microphone; fullscreen; display-capture; autoplay; encrypted-media; picture-in-picture"
                 />
               </div>
 
@@ -360,8 +366,8 @@ export default function Today() {
                 fontSize: '0.8rem',
                 color: '#64748b'
               }}>
-                <span>Session: {liveSession?.id ? liveSession.id.substring(0, 16) + '...' : 'Main Studio'}</span>
-                <span>WebRTC Mesh • Two-Way Audio Active</span>
+                <span>Session: {currentSession?.title || 'Daily Session'}</span>
+                <span>{isLive ? 'WebRTC Live Transmission' : 'Permanent Daily Replay Active'}</span>
               </div>
             </div>
 

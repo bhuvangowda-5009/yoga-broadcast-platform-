@@ -26,110 +26,101 @@ export default function Pricing() {
     });
   };
 
+  async function finalizeSubscription(planId, planName, amount, paymentId) {
+    try {
+      const startDate = new Date().toISOString();
+      const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      await supabase.from('subscriptions').delete().eq('user_id', user.id);
+
+      const { error: subErr } = await supabase.from('subscriptions').insert([
+        {
+          user_id: user.id,
+          plan_id: planId,
+          payment_id: paymentId,
+          status: 'active',
+          start_date: startDate,
+          end_date: endDate
+        }
+      ]);
+
+      if (subErr) throw subErr;
+
+      await refreshUserData(user.id);
+      setMsg(`🎉 ${planName} unlocked successfully! Redirecting to studio...`);
+
+      setTimeout(() => {
+        navigate('/today');
+      }, 1500);
+    } catch (err) {
+      setMsg(`Subscription Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handlePayment(planId, planName, amount) {
     if (!user) {
-      alert('Please log in to purchase a practice pass.');
+      alert('Please log in or sign up before purchasing a pass.');
       navigate('/login');
       return;
     }
 
     if (isStaff) {
-      alert(`As ${role.toUpperCase()}, you hold permanent staff access clearance.`);
+      alert(`As ${role.toUpperCase()}, you have permanent staff access clearance.`);
       return;
     }
 
     setLoading(true);
     setMsg('');
 
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID;
+    const hasValidKey = razorpayKey && razorpayKey.startsWith('rzp_') && !razorpayKey.includes('YourTestKeyId');
+
+    // If Razorpay API key is not yet set in production, activate developer fallback
+    if (!hasValidKey) {
+      const mockPayId = `pay_simulated_${Date.now()}`;
+      await finalizeSubscription(planId, planName, amount, mockPayId);
+      return;
+    }
+
     try {
       const isLoaded = await loadRazorpayScript();
-      if (!isLoaded) throw new Error('Razorpay SDK failed to load.');
-
-      const isLocalhost =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1';
-
-      let orderId = `order_local_${Date.now()}`;
-
-      if (!isLocalhost) {
-        try {
-          const orderRes = await fetch('/api/create-razorpay-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount, planId }),
-          });
-          const orderData = await orderRes.json();
-          if (orderData.id) orderId = orderData.id;
-        } catch (err) {
-          console.warn('Backend order fallback:', err);
-        }
-      }
+      if (!isLoaded) throw new Error('Razorpay gateway failed to load.');
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_YourTestKeyId',
-        amount: amount * 100,
+        key: razorpayKey,
+        amount: Math.round(Number(amount) * 100),
         currency: 'INR',
-        name: 'YogaLive Studio',
+        name: 'YogaLive Broadcasts',
         description: `${planName} Subscription`,
-        order_id: orderId.startsWith('order_local_') ? undefined : orderId,
         prefill: {
           name: profile?.name || user.email.split('@')[0],
           email: user.email,
-          contact: profile?.phone || '9876543210',
+          contact: profile?.phone || '+919876543210'
         },
         theme: {
-          color: '#0284c7',
+          color: '#0284c7'
         },
         handler: async function (response) {
-          try {
-            const paymentId = response.razorpay_payment_id || `pay_${Date.now()}`;
-            const startDate = new Date().toISOString();
-            const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-            await supabase.from('subscriptions').delete().eq('user_id', user.id);
-
-            const { error: subErr } = await supabase.from('subscriptions').insert([
-              {
-                user_id: user.id,
-                plan_id: planId,
-                payment_id: paymentId,
-                status: 'active',
-                start_date: startDate,
-                end_date: endDate,
-              },
-            ]);
-
-            if (subErr) throw subErr;
-
-            await supabase.from('notifications').insert([
-              {
-                user_id: user.id,
-                type: 'sms',
-                message: `Namaste! Your YogaLive ${planName} is active. Ref: ${paymentId}`,
-              },
-            ]);
-
-            await refreshUserData(user.id);
-            setMsg(`🎉 Payment of ₹${amount} successful! Unlocking ${planName}...`);
-
-            setTimeout(() => {
-              navigate('/today');
-            }, 1500);
-          } catch (err) {
-            setMsg(`Activation Error: ${err.message}`);
-          }
+          const paymentId = response.razorpay_payment_id || `pay_${Date.now()}`;
+          await finalizeSubscription(planId, planName, amount, paymentId);
         },
         modal: {
           ondismiss: function () {
             setLoading(false);
-          },
-        },
+          }
+        }
       };
 
       const rzpInstance = new window.Razorpay(options);
+      rzpInstance.on('payment.failed', function (resp) {
+        setMsg(`Payment failed: ${resp.error?.description || 'Declined'}`);
+        setLoading(false);
+      });
       rzpInstance.open();
     } catch (err) {
-      setMsg(`Error launching checkout: ${err.message}`);
+      setMsg(`Gateway Error: ${err.message}`);
       setLoading(false);
     }
   }
@@ -154,18 +145,17 @@ export default function Pricing() {
           marginBottom: '1rem'
         }}>
           <span style={{ fontSize: '0.72rem', fontWeight: '800', letterSpacing: '0.8px', color: '#38bdf8' }}>
-            PRACTICE LEVEL PRICING ALLOCATIONS
+            OFFICIAL SUBSCRIPTION TIERS
           </span>
         </div>
 
         <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.8px', margin: '0 0 0.6rem 0' }}>
-          Choose Your Practice Tier
+          Select Your Practice Pass
         </h1>
         <p style={{ color: '#94a3b8', fontSize: '1rem', maxWidth: '640px', margin: '0 auto 2rem auto' }}>
-          Tailored subscriptions for your yoga journey. Every account starts with a <strong>1-Day Free Trial</strong> for all live practices.
+          1st Day is 100% Free for all new subscribers. Choose a tier below to unlock Day 2 onward and full library recordings.
         </p>
 
-        {/* DEMO NOTICE */}
         {isDemoActive && !subscription && !isStaff && (
           <div style={{
             background: 'rgba(245, 158, 11, 0.12)',
@@ -173,13 +163,12 @@ export default function Pricing() {
             color: '#fbbf24',
             padding: '0.8rem 1.2rem',
             borderRadius: '12px',
-            marginBottom: '2rem',
             maxWidth: '650px',
             margin: '0 auto 2rem auto',
             fontSize: '0.88rem',
             fontWeight: '600'
           }}>
-            ✨ Day 1 Free Demo Active! You can join any live studio practice today without payment. Select a tier below for uninterrupted access.
+            ✨ Day 1 Free Trial Active! You can attend live sessions and chat freely today. Pick a pass below for Day 2 continuation and library vault access.
           </div>
         )}
 
@@ -189,38 +178,37 @@ export default function Pricing() {
             border: '1px solid rgba(244, 63, 94, 0.3)',
             borderRadius: '12px',
             padding: '1.2rem',
-            marginBottom: '2rem',
-            textAlign: 'center'
+            marginBottom: '2rem'
           }}>
             <h4 style={{ margin: '0 0 4px 0', color: '#fb7185', fontSize: '1.05rem', fontWeight: '800' }}>
-              🛡️ Staff Access Clearance Active
+              🛡️ Staff Access Clearance
             </h4>
             <p style={{ margin: 0, fontSize: '0.85rem', color: '#cbd5e1' }}>
-              You are logged in as <strong>{role.toUpperCase()}</strong>. You hold universal studio and library clearance.
+              Logged in as <strong>{role.toUpperCase()}</strong>. You hold full system privileges and do not require paid passes.
             </p>
           </div>
         )}
 
         {subscription && !isStaff && (
           <div style={{
-            background: 'rgba(56, 189, 248, 0.12)',
-            border: '1px solid rgba(56, 189, 248, 0.3)',
-            color: '#38bdf8',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#34d399',
             padding: '0.85rem',
             borderRadius: '10px',
             marginBottom: '2rem',
             fontWeight: '700',
             fontSize: '0.9rem'
           }}>
-            ✓ Active Subscription: <strong>{subscription.plan_id.toUpperCase()} TIER</strong> (Valid until {new Date(subscription.end_date).toLocaleDateString()})
+            ✓ Active Subscription: <strong>{subscription.plan_id.toUpperCase()} PASS</strong> (Expires: {new Date(subscription.end_date).toLocaleDateString()})
           </div>
         )}
 
         {msg && (
           <div style={{
-            background: msg.includes('successful') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
-            border: msg.includes('successful') ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-            color: msg.includes('successful') ? '#34d399' : '#f87171',
+            background: msg.includes('unlocked') || msg.includes('successful') ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+            border: msg.includes('unlocked') || msg.includes('successful') ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+            color: msg.includes('unlocked') || msg.includes('successful') ? '#34d399' : '#f87171',
             padding: '0.8rem',
             borderRadius: '10px',
             marginBottom: '2rem',
@@ -230,14 +218,14 @@ export default function Pricing() {
           </div>
         )}
 
-        {/* 3 PRACTICE-LEVEL TIERS */}
+        {/* 3 TIERS */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(310px, 1fr))',
           gap: '24px',
           marginTop: '1rem'
         }}>
-          {/* TIER 1: FOUNDATION */}
+          {/* TIER 1 */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.65)',
             border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -251,17 +239,16 @@ export default function Pricing() {
           }}>
             <div>
               <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.8px' }}>
-                LEVEL 1: BEGINNER
+                FOUNDATION TIER
               </span>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Foundation Tier</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Beginner & Hatha</h3>
               <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
                 ₹299<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
               </p>
               <ul style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.8, paddingLeft: '1.2rem', margin: '0 0 1.5rem 0' }}>
-                <li>Daily Beginner Morning Surya Namaskar</li>
-                <li>Hatha Yoga Alignment & Posture basics</li>
-                <li>Daily Pranayama (Breathwork) sessions</li>
-                <li>Live Chat instructor Q&A</li>
+                <li>Day 2+ live access to Beginner Surya Namaskar</li>
+                <li>Hatha posture alignment & guided breathwork</li>
+                <li>Live interactive posture doubts chat</li>
                 <li style={{ color: '#64748b' }}>✕ Library recordings not included</li>
               </ul>
             </div>
@@ -279,11 +266,11 @@ export default function Pricing() {
                 cursor: (loading || isStaff) ? 'not-allowed' : 'pointer'
               }}
             >
-              {isStaff ? 'Staff Exempt' : 'Select Foundation (₹299)'}
+              {isStaff ? 'Staff Exempt' : 'Activate Foundation (₹299)'}
             </button>
           </div>
 
-          {/* TIER 2: VINYASA FLOW */}
+          {/* TIER 2 */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.65)',
             border: '1px solid rgba(56, 189, 248, 0.35)',
@@ -297,9 +284,9 @@ export default function Pricing() {
           }}>
             <div>
               <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.8px' }}>
-                LEVEL 2: INTERMEDIATE
+                VINYASA FLOW TIER
               </span>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Vinyasa Flow Tier</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Intermediate Flow</h3>
               <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
                 ₹599<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
               </p>
@@ -307,7 +294,7 @@ export default function Pricing() {
                 <li>Everything in Foundation Tier</li>
                 <li>Dynamic Vinyasa Flow morning & evening</li>
                 <li>Spinal mobility & core conditioning</li>
-                <li>Real-time posture feedback via chat</li>
+                <li>Direct live posture feedback from master</li>
                 <li style={{ color: '#64748b' }}>✕ Library recordings not included</li>
               </ul>
             </div>
@@ -325,11 +312,11 @@ export default function Pricing() {
                 cursor: (loading || isStaff) ? 'not-allowed' : 'pointer'
               }}
             >
-              {isStaff ? 'Staff Exempt' : 'Select Vinyasa (₹599)'}
+              {isStaff ? 'Staff Exempt' : 'Activate Vinyasa (₹599)'}
             </button>
           </div>
 
-          {/* TIER 3: MASTERY ALL-ACCESS (INCLUDES ON-DEMAND LIBRARY) */}
+          {/* TIER 3: MASTERY ALL-ACCESS */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.65)',
             border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -345,22 +332,21 @@ export default function Pricing() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.74rem', fontWeight: '800', color: '#34d399', letterSpacing: '0.8px' }}>
-                  LEVEL 3: ADVANCED + VAULT
+                  MASTERY ALL-ACCESS
                 </span>
                 <span style={{ fontSize: '0.7rem', fontWeight: '800', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', padding: '2px 8px', borderRadius: '4px' }}>
-                  MOST COMPLETE
+                  INCLUDES VAULT
                 </span>
               </div>
-              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Mastery All-Access</h3>
+              <h3 style={{ fontSize: '1.4rem', fontWeight: '800', margin: '0.3rem 0 0.8rem 0' }}>Full Yoga Pass</h3>
               <p style={{ fontSize: '2.5rem', fontWeight: '900', color: '#f8fafc', margin: '0 0 0.8rem 0' }}>
                 ₹999<span style={{ fontSize: '1rem', color: '#64748b' }}> / month</span>
               </p>
               <ul style={{ color: '#94a3b8', fontSize: '0.86rem', lineHeight: 1.8, paddingLeft: '1.2rem', margin: '0 0 1.5rem 0' }}>
-                <li>Unrestricted access to all Beginner, Intermediate & Advanced live sessions</li>
-                <li>Ashtanga Primary Series & Bandha alignment</li>
-                <li><strong>Exclusive 24/7 access to On-Demand Library Recordings</strong></li>
-                <li>WhatsApp & SMS automated reminders</li>
-                <li>Full habit streak analytics</li>
+                <li>All Beginner, Intermediate & Advanced live sessions</li>
+                <li><strong>Exclusive 24/7 Access to On-Demand Recorded Library</strong></li>
+                <li>WhatsApp class alerts directly from coordinator</li>
+                <li>Full habit streak tracking</li>
               </ul>
             </div>
             <button
